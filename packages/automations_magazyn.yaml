@@ -1,0 +1,2159 @@
+automation:
+
+- alias: "PV/Battery/Grid - tryby pracy (sync docelowego profilu)"
+  id: pv_battery_grid_modes_profile_sync_v2
+  mode: restart
+  description: >
+    Synchronizacja trybu pracy Solarmana do docelowego profilu.
+    Zmienia tylko parametry, które wymagają zmiany.
+    Przy wyłączeniu trybu najpierw czyści ślad po tym trybie,
+    a następnie doprowadza falownik do finalnego stanu.
+
+  trigger:
+    - platform: state
+      entity_id:
+        - input_boolean.battery_charge_from_grid
+        - input_boolean.battery_discharge_to_grid
+        - input_boolean.pv_discharge_to_grid
+        - input_number.manual_battery_charge_limit
+
+  variables:
+    delay_after_change: "00:00:02"
+
+    trigger_entity: "{{ trigger.entity_id }}"
+    trigger_to: "{{ trigger.to_state.state if trigger.to_state is not none else '' }}"
+
+    manual_limit: "{{ states('input_number.manual_battery_charge_limit') | int(100) }}"
+
+    desired_mode: >
+      {% if trigger.entity_id == 'input_boolean.pv_discharge_to_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
+        pv_export
+      {% elif trigger.entity_id == 'input_boolean.battery_discharge_to_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
+        bat_export
+      {% elif trigger.entity_id == 'input_boolean.battery_charge_from_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
+        charge_from_grid
+      {% elif is_state('input_boolean.pv_discharge_to_grid', 'on') %}
+        pv_export
+      {% elif is_state('input_boolean.battery_discharge_to_grid', 'on') %}
+        bat_export
+      {% elif is_state('input_boolean.battery_charge_from_grid', 'on') %}
+        charge_from_grid
+      {% else %}
+        off
+      {% endif %}
+
+    target_switch_grid_charging: >
+      {% if desired_mode == 'charge_from_grid' %}on{% else %}off{% endif %}
+
+    target_program_charging: >
+      {% if desired_mode == 'charge_from_grid' %}Grid{% else %}Disabled{% endif %}
+
+    target_program_soc: >
+      {% if desired_mode == 'charge_from_grid' %}
+        {{ manual_limit }}
+      {% else %}
+        20
+      {% endif %}
+
+    target_battery_max_discharging_current: >
+      {% if desired_mode == 'pv_export' %}
+        0
+      {% else %}
+        120
+      {% endif %}
+
+    target_work_mode: >
+      {% if desired_mode in ['pv_export', 'bat_export'] %}
+        Export First
+      {% else %}
+        Zero Export To CT
+      {% endif %}
+
+  action:
+    ###########################################################################
+    # 1. PRE-CLEAN: jeśli konkretny tryb właśnie został wyłączony,
+    #    najpierw zdejmij jego ślad z Solarmana.
+    ###########################################################################
+    - choose:
+        # --- wyłączono PV export ---
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ trigger_entity == 'input_boolean.pv_discharge_to_grid' and trigger_to == 'off' }}
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+                  sequence:
+                    - action: number.set_value
+                      target:
+                        entity_id: number.solarman_battery_max_discharging_current
+                      data:
+                        value: 120
+                    - delay: "{{ delay_after_change }}"
+
+            - repeat:
+                count: 6
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != 'Disabled' }}
+                        sequence:
+                          - action: select.select_option
+                            target:
+                              entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                            data:
+                              option: "Disabled"
+                          - delay: "{{ delay_after_change }}"
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != 20 }}
+                        sequence:
+                          - action: number.set_value
+                            target:
+                              entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                            data:
+                              value: 20
+                          - delay: "{{ delay_after_change }}"
+
+        # --- wyłączono BAT export ---
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ trigger_entity == 'input_boolean.battery_discharge_to_grid' and trigger_to == 'off' }}
+          sequence:
+            - repeat:
+                count: 6
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != 'Disabled' }}
+                        sequence:
+                          - action: select.select_option
+                            target:
+                              entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                            data:
+                              option: "Disabled"
+                          - delay: "{{ delay_after_change }}"
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != 20 }}
+                        sequence:
+                          - action: number.set_value
+                            target:
+                              entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                            data:
+                              value: 20
+                          - delay: "{{ delay_after_change }}"
+
+        # --- wyłączono Charge from Grid ---
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ trigger_entity == 'input_boolean.battery_charge_from_grid' and trigger_to == 'off' }}
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: switch.solarman_battery_grid_charging
+                      state: "on"
+                  sequence:
+                    - action: switch.turn_off
+                      target:
+                        entity_id: switch.solarman_battery_grid_charging
+                    - delay: "{{ delay_after_change }}"
+
+            - repeat:
+                count: 6
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != 'Disabled' }}
+                        sequence:
+                          - action: select.select_option
+                            target:
+                              entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                            data:
+                              option: "Disabled"
+                          - delay: "{{ delay_after_change }}"
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != 20 }}
+                        sequence:
+                          - action: number.set_value
+                            target:
+                              entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                            data:
+                              value: 20
+                          - delay: "{{ delay_after_change }}"
+
+    ###########################################################################
+    # 2. DOPROWADŹ SOLARMANA DO DOCELOWEGO PROFILU
+    ###########################################################################
+
+    # switch.solarman_battery_grid_charging
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ states('switch.solarman_battery_grid_charging') != target_switch_grid_charging }}
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ target_switch_grid_charging == 'on' }}"
+                  sequence:
+                    - action: switch.turn_on
+                      target:
+                        entity_id: switch.solarman_battery_grid_charging
+                - conditions:
+                    - condition: template
+                      value_template: "{{ target_switch_grid_charging == 'off' }}"
+                  sequence:
+                    - action: switch.turn_off
+                      target:
+                        entity_id: switch.solarman_battery_grid_charging
+            - delay: "{{ delay_after_change }}"
+
+    # programy charging + SOC
+    - repeat:
+        count: 6
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != target_program_charging }}
+                sequence:
+                  - action: select.select_option
+                    target:
+                      entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                    data:
+                      option: "{{ target_program_charging }}"
+                  - delay: "{{ delay_after_change }}"
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != (target_program_soc | float(999)) }}
+                sequence:
+                  - action: number.set_value
+                    target:
+                      entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                    data:
+                      value: "{{ target_program_soc | int }}"
+                  - delay: "{{ delay_after_change }}"
+
+    # max discharging current
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ states('number.solarman_battery_max_discharging_current') | float(999) != (target_battery_max_discharging_current | float(999)) }}
+          sequence:
+            - action: number.set_value
+              target:
+                entity_id: number.solarman_battery_max_discharging_current
+              data:
+                value: "{{ target_battery_max_discharging_current | int }}"
+            - delay: "{{ delay_after_change }}"
+
+    # work mode
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ states('select.solarman_work_mode') != target_work_mode }}
+          sequence:
+            - action: select.select_option
+              target:
+                entity_id: select.solarman_work_mode
+              data:
+                option: "{{ target_work_mode }}"
+            - delay: "{{ delay_after_change }}"
+
+    ###########################################################################
+    # 3. WYRÓWNAJ BOOLEANY DO FINALNEGO TRYBU
+    #    Robimy to na końcu, żeby Solarman najpierw dostał właściwy profil.
+    ###########################################################################
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ desired_mode == 'pv_export' }}"
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_charge_from_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_charge_from_grid
+
+        - conditions:
+            - condition: template
+              value_template: "{{ desired_mode == 'bat_export' }}"
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.pv_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.pv_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_charge_from_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_charge_from_grid
+
+        - conditions:
+            - condition: template
+              value_template: "{{ desired_mode == 'charge_from_grid' }}"
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.pv_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.pv_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_discharge_to_grid
+
+        - conditions:
+            - condition: template
+              value_template: "{{ desired_mode == 'off' }}"
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.pv_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.pv_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_charge_from_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_charge_from_grid
+
+
+- alias: "PV/Battery/Grid - watchdog Inna konfiguracja > 3 min"
+  id: pv_battery_grid_modes_watchdog_inna_konfiguracja_v1
+  mode: single
+  description: >
+    Jeśli sensor.tryb_dzialania_solarman pozostaje w stanie
+    'Inna konfiguracja' dłużej niż 3 minuty, wymuś pełny cleanup
+    oraz wyłącz wszystkie 3 przełączniki.
+
+  trigger:
+    - platform: state
+      entity_id: sensor.tryb_dzialania_solarman
+      to: "Inna konfiguracja"
+      for: "00:03:00"
+
+  variables:
+    delay_after_change: "00:00:02"
+
+  action:
+    # wyłącz booleany
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.pv_discharge_to_grid
+              state: "on"
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.pv_discharge_to_grid
+
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.battery_discharge_to_grid
+              state: "on"
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.battery_discharge_to_grid
+
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.battery_charge_from_grid
+              state: "on"
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.battery_charge_from_grid
+
+    # switch grid charging
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: switch.solarman_battery_grid_charging
+              state: "on"
+          sequence:
+            - action: switch.turn_off
+              target:
+                entity_id: switch.solarman_battery_grid_charging
+            - delay: "{{ delay_after_change }}"
+
+    # wszystkie programy charging -> Disabled
+    # wszystkie SOC -> 20
+    - repeat:
+        count: 6
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != 'Disabled' }}
+                sequence:
+                  - action: select.select_option
+                    target:
+                      entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                    data:
+                      option: "Disabled"
+                  - delay: "{{ delay_after_change }}"
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != 20 }}
+                sequence:
+                  - action: number.set_value
+                    target:
+                      entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                    data:
+                      value: 20
+                  - delay: "{{ delay_after_change }}"
+
+    # max discharging current -> 120
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+          sequence:
+            - action: number.set_value
+              target:
+                entity_id: number.solarman_battery_max_discharging_current
+              data:
+                value: 120
+            - delay: "{{ delay_after_change }}"
+
+    # work mode -> Zero Export To CT
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ states('select.solarman_work_mode') != 'Zero Export To CT' }}
+          sequence:
+            - action: select.select_option
+              target:
+                entity_id: select.solarman_work_mode
+              data:
+                option: "Zero Export To CT"
+            - delay: "{{ delay_after_change }}"
+
+- alias: "PV/Battery/Grid - watchdog stanu przejściowego > 3 min"
+  id: pv_battery_grid_modes_watchdog_stan_przejsciowy_v1
+  mode: single
+  description: >
+    Jeśli sensor.tryb_dzialania_solarman pozostaje dłużej niż 3 minuty
+    w jednym ze stanów przejściowych "konfiguracja w toku",
+    wymuś docelowy profil dla tego trybu bez pełnego cleanupu.
+
+  trigger:
+    - platform: state
+      entity_id: sensor.tryb_dzialania_solarman
+      to: "Start ładowania z Grid (konfiguracja w toku)"
+      for: "00:03:00"
+
+    - platform: state
+      entity_id: sensor.tryb_dzialania_solarman
+      to: "Start oddawania PV (konfiguracja w toku)"
+      for: "00:03:00"
+
+    - platform: state
+      entity_id: sensor.tryb_dzialania_solarman
+      to: "Start oddawania z baterii (konfiguracja w toku)"
+      for: "00:03:00"
+
+  variables:
+    delay_after_change: "00:00:02"
+    current_state: "{{ trigger.to_state.state if trigger.to_state is not none else '' }}"
+    manual_limit: "{{ states('input_number.manual_battery_charge_limit') | int(100) }}"
+
+  action:
+    - choose:
+
+        #######################################################################
+        # 1. START ŁADOWANIA Z GRID (konfiguracja w toku)
+        #######################################################################
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ current_state == 'Start ładowania z Grid (konfiguracja w toku)' }}
+          sequence:
+            # upewnij booleany
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.pv_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.pv_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_charge_from_grid
+                      state: "off"
+                  sequence:
+                    - action: input_boolean.turn_on
+                      target:
+                        entity_id: input_boolean.battery_charge_from_grid
+
+            # switch grid charging -> on
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: switch.solarman_battery_grid_charging
+                      state: "off"
+                  sequence:
+                    - action: switch.turn_on
+                      target:
+                        entity_id: switch.solarman_battery_grid_charging
+                    - delay: "{{ delay_after_change }}"
+
+            # work mode -> Zero Export To CT
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('select.solarman_work_mode') != 'Zero Export To CT' }}
+                  sequence:
+                    - action: select.select_option
+                      target:
+                        entity_id: select.solarman_work_mode
+                      data:
+                        option: "Zero Export To CT"
+                    - delay: "{{ delay_after_change }}"
+
+            # max discharging current -> 120
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+                  sequence:
+                    - action: number.set_value
+                      target:
+                        entity_id: number.solarman_battery_max_discharging_current
+                      data:
+                        value: 120
+                    - delay: "{{ delay_after_change }}"
+
+            # wszystkie programy charging -> Grid, SOC -> manual_limit
+            - repeat:
+                count: 6
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != 'Grid' }}
+                        sequence:
+                          - action: select.select_option
+                            target:
+                              entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                            data:
+                              option: "Grid"
+                          - delay: "{{ delay_after_change }}"
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != (manual_limit | float(999)) }}
+                        sequence:
+                          - action: number.set_value
+                            target:
+                              entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                            data:
+                              value: "{{ manual_limit }}"
+                          - delay: "{{ delay_after_change }}"
+
+        #######################################################################
+        # 2. START ODDAWANIA PV (konfiguracja w toku)
+        #######################################################################
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ current_state == 'Start oddawania PV (konfiguracja w toku)' }}
+          sequence:
+            # upewnij booleany
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_charge_from_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_charge_from_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.pv_discharge_to_grid
+                      state: "off"
+                  sequence:
+                    - action: input_boolean.turn_on
+                      target:
+                        entity_id: input_boolean.pv_discharge_to_grid
+
+            # switch grid charging -> off
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: switch.solarman_battery_grid_charging
+                      state: "on"
+                  sequence:
+                    - action: switch.turn_off
+                      target:
+                        entity_id: switch.solarman_battery_grid_charging
+                    - delay: "{{ delay_after_change }}"
+
+            # work mode -> Export First
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('select.solarman_work_mode') != 'Export First' }}
+                  sequence:
+                    - action: select.select_option
+                      target:
+                        entity_id: select.solarman_work_mode
+                      data:
+                        option: "Export First"
+                    - delay: "{{ delay_after_change }}"
+
+            # max discharging current -> 0
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 0 }}
+                  sequence:
+                    - action: number.set_value
+                      target:
+                        entity_id: number.solarman_battery_max_discharging_current
+                      data:
+                        value: 0
+                    - delay: "{{ delay_after_change }}"
+
+            # wszystkie programy charging -> Disabled, SOC -> 20
+            - repeat:
+                count: 6
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != 'Disabled' }}
+                        sequence:
+                          - action: select.select_option
+                            target:
+                              entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                            data:
+                              option: "Disabled"
+                          - delay: "{{ delay_after_change }}"
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != 20 }}
+                        sequence:
+                          - action: number.set_value
+                            target:
+                              entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                            data:
+                              value: 20
+                          - delay: "{{ delay_after_change }}"
+
+        #######################################################################
+        # 3. START ODDAWANIA Z BATERII (konfiguracja w toku)
+        #######################################################################
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ current_state == 'Start oddawania z baterii (konfiguracja w toku)' }}
+          sequence:
+            # upewnij booleany
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_charge_from_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.battery_charge_from_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.pv_discharge_to_grid
+                      state: "on"
+                  sequence:
+                    - action: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.pv_discharge_to_grid
+
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: input_boolean.battery_discharge_to_grid
+                      state: "off"
+                  sequence:
+                    - action: input_boolean.turn_on
+                      target:
+                        entity_id: input_boolean.battery_discharge_to_grid
+
+            # switch grid charging -> off
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: switch.solarman_battery_grid_charging
+                      state: "on"
+                  sequence:
+                    - action: switch.turn_off
+                      target:
+                        entity_id: switch.solarman_battery_grid_charging
+                    - delay: "{{ delay_after_change }}"
+
+            # work mode -> Export First
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('select.solarman_work_mode') != 'Export First' }}
+                  sequence:
+                    - action: select.select_option
+                      target:
+                        entity_id: select.solarman_work_mode
+                      data:
+                        option: "Export First"
+                    - delay: "{{ delay_after_change }}"
+
+            # max discharging current -> 120
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+                  sequence:
+                    - action: number.set_value
+                      target:
+                        entity_id: number.solarman_battery_max_discharging_current
+                      data:
+                        value: 120
+                    - delay: "{{ delay_after_change }}"
+
+            # wszystkie programy charging -> Disabled, SOC -> 20
+            - repeat:
+                count: 6
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('select.solarman_program_' ~ repeat.index ~ '_charging') != 'Disabled' }}
+                        sequence:
+                          - action: select.select_option
+                            target:
+                              entity_id: "select.solarman_program_{{ repeat.index }}_charging"
+                            data:
+                              option: "Disabled"
+                          - delay: "{{ delay_after_change }}"
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{ states('number.solarman_program_' ~ repeat.index ~ '_soc') | float(999) != 20 }}
+                        sequence:
+                          - action: number.set_value
+                            target:
+                              entity_id: "number.solarman_program_{{ repeat.index }}_soc"
+                            data:
+                              value: 20
+                          - delay: "{{ delay_after_change }}"
+
+
+
+- alias: "Magazyn: RANO (06-12) cel na 13:00 v6 + LOWPV + EXPORT topup"
+  id: magazyn_rano_cel_na_13_v6_lowpv_export_topup
+  mode: single
+  description: >
+    RANO: dobiera doładowanie z sieci tak, aby o 13:00 osiągnąć docelowy SOC
+    z var.cel_naladowania_o_13, jednocześnie nie spaść po drodze poniżej 25%
+    i unikać spillu przed 13:00.
+    LOWPV: jeśli prognoza PV na dziś < 8 kWh -> ładuj FULL (100%).
+    Dodatkowo: opcjonalne ekstra doładowanie pod poranny eksport 06:00–11:00,
+    ale z poszanowaniem celu SOC na 13:00.
+
+  trigger:
+    - platform: time
+      at: "03:00:00"
+    - platform: time
+      at: "03:30:00"
+    - platform: time
+      at: "04:00:00"
+    - platform: time
+      at: "04:30:00"
+    - platform: time
+      at: "05:00:00"
+    - platform: time
+      at: "05:30:00"
+    - platform: time
+      at: "05:45:00"
+
+  condition: []
+
+  action:
+    - variables:
+        tz_to: "{{ now().strftime('%z')[0:3] ~ ':' ~ now().strftime('%z')[3:5] }}"
+        sql_query: >
+          SELECT
+            HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) AS h,
+            AVG(CAST(s.state AS DECIMAL(10,3))) AS avg_h
+          FROM states s
+          JOIN states_meta m ON s.metadata_id = m.metadata_id
+          WHERE m.entity_id = 'sensor.srednie_zuzycie_o_obecnej_godzinie'
+            AND s.state NOT IN ('unknown', 'unavailable', '')
+            AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 604800)
+            AND HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) BETWEEN 3 AND 12
+          GROUP BY h
+          ORDER BY h;
+
+    - service: sql.query
+      data:
+        query: "{{ sql_query }}"
+      response_variable: statystyki_godzinowe
+
+    - variables:
+        wyniki_pakiet: >-
+          {% set soc_akt = states('sensor.solarman_battery_safe') | float(25) %}
+          {% set pojemnosc_kwh = 15.0 %}
+          {% set prog_min_kwh = 3.0 %}
+          {% set zapas_kwh = 0.75 %}
+          {% set dzis = now().date() %}
+          {% set current_hour = now().hour %}
+          {% set current_minute = now().minute %}
+
+          {% set target_soc_13 = states('var.cel_naladowania_o_13') | float(50) %}
+          {% if target_soc_13 < 25 %}{% set target_soc_13 = 25 %}{% endif %}
+          {% if target_soc_13 > 100 %}{% set target_soc_13 = 100 %}{% endif %}
+
+          {% set max_ene_u = (pojemnosc_kwh - prog_min_kwh) %}
+          {% set E0_u = ((soc_akt / 100) * pojemnosc_kwh - prog_min_kwh) %}
+          {% if E0_u < 0 %}{% set E0_u = 0 %}{% endif %}
+          {% if E0_u > max_ene_u %}{% set E0_u = max_ene_u %}{% endif %}
+
+          {% set target_u_13 = ((target_soc_13 / 100) * pojemnosc_kwh - prog_min_kwh) %}
+          {% if target_u_13 < 0 %}{% set target_u_13 = 0 %}{% endif %}
+          {% if target_u_13 > max_ene_u %}{% set target_u_13 = max_ene_u %}{% endif %}
+
+          {# ===== PV dzienna ===== #}
+          {% set pv_today_kwh = states('sensor.solcast_pv_forecast_prognoza_na_dzisiaj') | float(0) %}
+          {% if pv_today_kwh == 0 %}
+            {% set pv_today_kwh = (
+              state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'forecast_today')
+              or state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'energy_today')
+              or 0
+            ) | float(0) %}
+          {% endif %}
+
+          {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedHourly') or [] %}
+          {% set ceny_data = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
+
+          {# ===== SQL rows -> dict_z ===== #}
+          {% set rows = statystyki_godzinowe['result'] if (statystyki_godzinowe is mapping and 'result' in statystyki_godzinowe) else [] %}
+          {% set nsd = namespace(d={}) %}
+          {% for row in rows %}
+            {% set nsd.d = nsd.d | combine({ (row['h'] | string): (row['avg_h'] | float) }) %}
+          {% endfor %}
+          {% set dict_z = nsd.d %}
+
+          {# ===== Salda ===== #}
+          {% set ns = namespace(
+            S_pre=0.0,
+            S_post=0.0,
+            Smin_post=0.0,
+            Smax_post=0.0,
+            h_min=6,
+            spill=0.0,
+            raport=""
+          ) %}
+
+          {% set ns.raport = "G:START | E_u:" ~ E0_u|round(2) ~ "kWh | SOC:" ~ soc_akt|round(1) ~ "% | CEL13:" ~ target_soc_13|round(0) ~ "% | TZ:" ~ now().strftime('%z') %}
+          {% set ns.raport = ns.raport ~ "\nPV_today_kWh:" ~ pv_today_kwh|round(2) %}
+          {% set ns.raport = ns.raport ~ "\nSQL rows:" ~ (rows|length) ~ " | dict_z:" ~ dict_z %}
+          {% set ns.raport = ns.raport ~ "\nAktualna godzina: " ~ current_hour ~ ":" ~ "%02d"|format(current_minute) %}
+
+          {% for h in range(3, 13) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 1.15 %}
+
+            {% set pv = namespace(v=0.0) %}
+            {% for item in forecast_data %}
+              {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
+              {% if ts.date() == dzis and ts.hour == h %}
+                {% set pv.v = (item.pv_estimate or item.pv_forecast or 0) | float %}
+              {% endif %}
+            {% endfor %}
+
+            {% set delta = (pv.v - z_h) %}
+
+            {% if h < 6 %}
+              {% set ns.S_pre = ns.S_pre + delta %}
+              {% set ns.raport = ns.raport ~
+                "\nG:" ~ "%02d"|format(h) ~
+                " | Z:" ~ z_h|round(2) ~
+                " | PV:" ~ pv.v|round(2) ~
+                " | d:" ~ delta|round(2) ~
+                " | Spre:" ~ ns.S_pre|round(2) ~
+                " (pre-window, bateria zamrożona)"
+              %}
+            {% else %}
+              {% set ns.S_post = ns.S_post + delta %}
+
+              {% if ns.S_post < ns.Smin_post %}
+                {% set ns.Smin_post = ns.S_post %}
+                {% set ns.h_min = h %}
+              {% endif %}
+
+              {% if ns.S_post > ns.Smax_post %}
+                {% set ns.Smax_post = ns.S_post %}
+              {% endif %}
+
+              {% set Eu_raw = E0_u + ns.S_post %}
+              {% if Eu_raw > max_ene_u %}
+                {% set Eu_show = max_ene_u %}
+                {% set ns.spill = ns.spill + (Eu_raw - max_ene_u) %}
+              {% elif Eu_raw < 0 %}
+                {% set Eu_show = 0 %}
+              {% else %}
+                {% set Eu_show = Eu_raw %}
+              {% endif %}
+
+              {% set w_soc = ((((Eu_show + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0)) | int %}
+              {% if w_soc < 0 %}{% set w_soc = 0 %}{% endif %}
+              {% if w_soc > 100 %}{% set w_soc = 100 %}{% endif %}
+
+              {% set ns.raport = ns.raport ~
+                "\nG:" ~ "%02d"|format(h) ~
+                " | Z:" ~ z_h|round(2) ~
+                " | PV:" ~ pv.v|round(2) ~
+                " | d:" ~ delta|round(2) ~
+                " | Spost:" ~ ns.S_post|round(2) ~
+                " | E_u:" ~ Eu_show|round(2) ~
+                " | SOC:" ~ w_soc ~ "%"
+              %}
+            {% endif %}
+          {% endfor %}
+
+          {# ===== Stan na 06:00 ===== #}
+          {% set E6_base = E0_u %}
+          {% if E6_base > max_ene_u %}{% set E6_base = max_ene_u %}{% endif %}
+          {% if E6_base < 0 %}{% set E6_base = 0 %}{% endif %}
+
+          {# ===== Warunek bezpieczeństwa 25% w oknie ===== #}
+          {% set E6_req_floor = zapas_kwh - ns.Smin_post %}
+          {% if E6_req_floor < 0 %}{% set E6_req_floor = 0 %}{% endif %}
+          {% if E6_req_floor > max_ene_u %}{% set E6_req_floor = max_ene_u %}{% endif %}
+
+          {# ===== Warunek celu na 13:00 ===== #}
+          {% set S_end_post = ns.S_post %}
+          {% set E6_req_target = target_u_13 - S_end_post %}
+          {% if E6_req_target < 0 %}{% set E6_req_target = 0 %}{% endif %}
+          {% if E6_req_target > max_ene_u %}{% set E6_req_target = max_ene_u %}{% endif %}
+
+          {# ===== Limit bez spillu przed 13:00 ===== #}
+          {% set E6_safe_max = max_ene_u - ns.Smax_post %}
+          {% if E6_safe_max < 0 %}{% set E6_safe_max = 0 %}{% endif %}
+          {% if E6_safe_max > max_ene_u %}{% set E6_safe_max = max_ene_u %}{% endif %}
+
+          {# ===== Bazowy plan poranny ===== #}
+          {% set E6_plan_required = [E6_req_floor, E6_req_target] | max %}
+          {% set E6_plan = [E6_plan_required, E6_safe_max] | min %}
+          {% if E6_plan < 0 %}{% set E6_plan = 0 %}{% endif %}
+          {% if E6_plan > max_ene_u %}{% set E6_plan = max_ene_u %}{% endif %}
+
+          {% set target_reachable = 'YES' if E6_req_target <= (E6_safe_max + 0.01) else 'NO' %}
+
+          {% set grid_add_u = [E6_plan - E6_base, 0] | max %}
+          {% set grid_add_u = [grid_add_u, (max_ene_u - E6_base)] | min %}
+          {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
+
+          {% set czy_ladowac = (grid_add_u | round(2)) >= 0.01 %}
+          {% set E_start_u_new = E6_base + grid_add_u %}
+
+          {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+          {% if cel < 25 %}{% set cel = 25 %}{% endif %}
+          {% if cel > 100 %}{% set cel = 100 %}{% endif %}
+
+          {% if target_reachable == 'YES' %}
+            {% set powod = 'TARGET13' %}
+          {% else %}
+            {% set powod = 'TARGET13_CAPPED_NO_SPILL' %}
+          {% endif %}
+
+          {# ===== LOWPV ===== #}
+          {% set force_full = (pv_today_kwh > 0 and pv_today_kwh < 8.0) %}
+          {% if force_full %}
+            {% set cel = 100 %}
+            {% set czy_ladowac = true %}
+            {% set powod = 'LOWPV' %}
+          {% endif %}
+
+          {# ===== ETAP 2: extra doładowanie pod poranny eksport ===== #}
+          {% set morning_export_topup_enabled = is_state('input_boolean.magazyn_doladowanie_pod_eksport_poranek', 'on') %}
+          {% set morning_export_extra_u = 0.0 %}
+          {% set morning_export_plan_batt_sum = 0.0 %}
+          {% set current_export_budget_u = 0.0 %}
+          {% set max_export_budget_u = 0.0 %}
+          {% set limit_dzienny = states('sensor.aktualny_limit_dzienny') | float(0) %}
+          {% set morning_export_reason = 'SKIP' %}
+          {% set morning_export_plan_lines = '' %}
+
+          {% if morning_export_topup_enabled and cel < 100 %}
+            {% set koszt_tansza = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0) %}
+            {% set koszt_drozsza = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) %}
+            {% set min_zysk_sprzedaz = states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0) %}
+            {% set semi_bat_min_price = koszt_tansza + min_zysk_sprzedaz %}
+            {% set full_bat_min_price = koszt_drozsza + min_zysk_sprzedaz %}
+            {% set max_moc_rozladowania_kw = states('var.magazyn_max_moc_rozladowania_kw') | float(6) %}
+            {% set battery_slot_cap_kwh = max_moc_rozladowania_kw * 0.25 %}
+            {% if battery_slot_cap_kwh < 0 %}{% set battery_slot_cap_kwh = 0 %}{% endif %}
+
+            {# export nie może zjechać poniżej celu na 13:00 #}
+            {% set export_floor_pct = [30, target_soc_13] | max %}
+            {% set export_floor_kwh_abs = pojemnosc_kwh * export_floor_pct / 100 %}
+
+            {% set E6_after_base = E6_base + grid_add_u %}
+            {% if E6_after_base < 0 %}{% set E6_after_base = 0 %}{% endif %}
+            {% if E6_after_base > max_ene_u %}{% set E6_after_base = max_ene_u %}{% endif %}
+
+            {% set energy_6_abs = E6_after_base + prog_min_kwh %}
+            {% set current_export_budget_u = energy_6_abs - export_floor_kwh_abs %}
+            {% if current_export_budget_u < 0 %}{% set current_export_budget_u = 0 %}{% endif %}
+
+            {% set max_export_budget_u = pojemnosc_kwh - export_floor_kwh_abs %}
+            {% if max_export_budget_u < 0 %}{% set max_export_budget_u = 0 %}{% endif %}
+
+            {# FULL #}
+            {% set nsFullCand = namespace(list=[]) %}
+            {% for c in ceny_data %}
+              {% if c is mapping and c.period is defined %}
+                {% set p = (c.period | string).replace('–', '-') %}
+                {% set p2 = p.replace(' ', '') %}
+                {% if '-' in p2 %}
+                  {% set parts = p2.split('-') %}
+                  {% set start = parts[0] %}
+                  {% set hm = start.split(':') %}
+                  {% if hm | length == 2 %}
+                    {% set h = hm[0] | int %}
+                    {% set price_mwh = c.rce_pln | float(0) %}
+                    {% set price_kwh = price_mwh / 1000 %}
+                    {% if h >= 6 and h < 11 and price_kwh >= full_bat_min_price %}
+                      {% set nsFullCand.list = nsFullCand.list + [{
+                        'period': c.period,
+                        'price_mwh': price_mwh,
+                        'price_kwh': price_kwh,
+                        'batt_cap': battery_slot_cap_kwh,
+                        'mode': 'full'
+                      }] %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set full_sorted = nsFullCand.list | sort(attribute='price_kwh', reverse=true) %}
+
+            {% set nsFull = namespace(rem=max_export_budget_u, batt_sum=0.0, lines='') %}
+            {% for s in full_sorted %}
+              {% if nsFull.rem > 0.001 %}
+                {% set batt_use = [s.batt_cap, nsFull.rem] | min %}
+                {% if batt_use < 0 %}{% set batt_use = 0 %}{% endif %}
+                {% if batt_use > 0 %}
+                  {% set nsFull.rem = nsFull.rem - batt_use %}
+                  {% set nsFull.batt_sum = nsFull.batt_sum + batt_use %}
+                  {% set nsFull.lines = nsFull.lines ~
+                    "\n- " ~ s.period ~
+                    " | FULL | " ~ (s.price_mwh | round(1)) ~ " PLN/MWh" ~
+                    " | bat:" ~ (batt_use | round(3)) ~ " kWh"
+                  %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {# SEMI #}
+            {% set nsSemiCand = namespace(list=[]) %}
+            {% for c in ceny_data %}
+              {% if c is mapping and c.period is defined %}
+                {% set p = (c.period | string).replace('–', '-') %}
+                {% set p2 = p.replace(' ', '') %}
+                {% if '-' in p2 %}
+                  {% set parts = p2.split('-') %}
+                  {% set start = parts[0] %}
+                  {% set hm = start.split(':') %}
+                  {% if hm | length == 2 %}
+                    {% set h = hm[0] | int %}
+                    {% set price_mwh = c.rce_pln | float(0) %}
+                    {% set price_kwh = price_mwh / 1000 %}
+                    {% if h >= 6 and h < 11 and price_kwh >= semi_bat_min_price and price_kwh < full_bat_min_price %}
+                      {% set nsSemiCand.list = nsSemiCand.list + [{
+                        'period': c.period,
+                        'price_mwh': price_mwh,
+                        'price_kwh': price_kwh,
+                        'batt_cap': battery_slot_cap_kwh,
+                        'mode': 'semi'
+                      }] %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set semi_sorted = nsSemiCand.list | sort(attribute='price_kwh', reverse=true) %}
+
+            {% set semi_rem_budget = max_export_budget_u - nsFull.batt_sum %}
+            {% if semi_rem_budget < 0 %}{% set semi_rem_budget = 0 %}{% endif %}
+
+            {% set nsSemi = namespace(rem=semi_rem_budget, batt_sum=0.0, lines='') %}
+            {% for s in semi_sorted %}
+              {% if nsSemi.rem > 0.001 %}
+                {% set batt_use = [s.batt_cap, nsSemi.rem] | min %}
+                {% if batt_use < 0 %}{% set batt_use = 0 %}{% endif %}
+                {% if batt_use > 0 %}
+                  {% set nsSemi.rem = nsSemi.rem - batt_use %}
+                  {% set nsSemi.batt_sum = nsSemi.batt_sum + batt_use %}
+                  {% set nsSemi.lines = nsSemi.lines ~
+                    "\n- " ~ s.period ~
+                    " | SEMI | " ~ (s.price_mwh | round(1)) ~ " PLN/MWh" ~
+                    " | bat:" ~ (batt_use | round(3)) ~ " kWh"
+                  %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% set morning_export_plan_batt_sum = nsFull.batt_sum + nsSemi.batt_sum %}
+            {% set morning_export_plan_lines = nsFull.lines ~ nsSemi.lines %}
+
+            {% if morning_export_plan_batt_sum <= 0.01 %}
+              {% set morning_export_reason = 'NO_SLOTS' %}
+            {% else %}
+              {% set morning_export_missing_u = morning_export_plan_batt_sum - current_export_budget_u %}
+              {% if morning_export_missing_u < 0 %}{% set morning_export_missing_u = 0 %}{% endif %}
+
+              {% set morning_export_extra_u = [morning_export_missing_u, limit_dzienny] | min %}
+              {% set morning_export_extra_u = [morning_export_extra_u, (max_ene_u - E6_after_base)] | min %}
+              {% if morning_export_extra_u < 0 %}{% set morning_export_extra_u = 0 %}{% endif %}
+
+              {% if morning_export_extra_u > 0.01 %}
+                {% set grid_add_u = grid_add_u + morning_export_extra_u %}
+                {% if grid_add_u > (max_ene_u - E6_base) %}
+                  {% set grid_add_u = (max_ene_u - E6_base) %}
+                {% endif %}
+                {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
+
+                {% set E_start_u_new = E6_base + grid_add_u %}
+                {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+                {% if cel < 25 %}{% set cel = 25 %}{% endif %}
+                {% if cel > 100 %}{% set cel = 100 %}{% endif %}
+
+                {% set czy_ladowac = true %}
+                {% set powod = powod ~ '+EXPORT' %}
+                {% set morning_export_reason = 'ADD_EXPORT_TOPUP' %}
+              {% else %}
+                {% set morning_export_reason = 'NO_EXTRA_TOPUP' %}
+              {% endif %}
+            {% endif %}
+          {% else %}
+            {% if not morning_export_topup_enabled %}
+              {% set morning_export_reason = 'FEATURE_OFF' %}
+            {% elif cel >= 100 %}
+              {% set morning_export_reason = 'SKIP_CEL_100' %}
+            {% else %}
+              {% set morning_export_reason = 'SKIP_OTHER' %}
+            {% endif %}
+          {% endif %}
+
+          {# ===== STICKY / MONOTONIC RANO ===== #}
+          {% set grid_juz_on = is_state('input_boolean.battery_charge_from_grid', 'on') %}
+          {% set czy_ladowac_final = (grid_juz_on or czy_ladowac) %}
+
+          {% set cel_final = cel %}
+          {% if cel_final < soc_akt %}
+            {% set cel_final = soc_akt | round(0) | int %}
+          {% endif %}
+          {% if cel_final > 100 %}{% set cel_final = 100 %}{% endif %}
+
+          {% set ns.raport = ns.raport ~
+            "\nTARGET13 | target_soc:" ~ target_soc_13|round(0) ~
+            "% | target_u:" ~ target_u_13|round(2) ~ "kWh" ~
+            " | E6_req_target:" ~ E6_req_target|round(2) ~ "kWh" ~
+            " | E6_req_floor:" ~ E6_req_floor|round(2) ~ "kWh" ~
+            " | E6_safe_max:" ~ E6_safe_max|round(2) ~ "kWh" ~
+            " | S_end:" ~ S_end_post|round(2) ~
+            " | Smax:" ~ ns.Smax_post|round(2) ~
+            " | reachable:" ~ target_reachable
+          %}
+
+          {% set ns.raport = ns.raport ~
+            "\nEXPORT_TOPUP | feature:" ~ ('ON' if morning_export_topup_enabled else 'OFF') ~
+            " | reason:" ~ morning_export_reason ~
+            " | extra:" ~ morning_export_extra_u|round(2) ~ "kWh" ~
+            " | plan_batt:" ~ morning_export_plan_batt_sum|round(2) ~ "kWh" ~
+            " | current_budget:" ~ current_export_budget_u|round(2) ~ "kWh" ~
+            " | max_budget:" ~ max_export_budget_u|round(2) ~ "kWh" ~
+            " | limit:" ~ limit_dzienny|round(2) ~ "kWh"
+          %}
+
+          {{ cel_final }}###{{ grid_add_u|round(2) }}###{{ E6_base|round(2) }}###{{ E6_req_floor|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ ns.h_min }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac_final else 'OFF' }}###{{ pv_today_kwh|round(2) }}###{{ 'YES' if force_full else 'NO' }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ target_soc_13|round(0) }}###{{ target_u_13|round(2) }}###{{ E6_req_target|round(2) }}###{{ E6_safe_max|round(2) }}###{{ target_reachable }}###{{ 'ON' if morning_export_topup_enabled else 'OFF' }}###{{ morning_export_extra_u|round(2) }}###{{ morning_export_plan_batt_sum|round(2) }}###{{ current_export_budget_u|round(2) }}###{{ max_export_budget_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ morning_export_reason }}###{{ morning_export_plan_lines }}###{{ powod }}
+
+    - service: var.set
+      data:
+        entity_id: var.spill_poranny
+        value: "{{ wyniki_pakiet.split('###')[6] | float(0) }}"
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          godzina_minimum: "{{ wyniki_pakiet.split('###')[5] }}"
+          unit_of_measurement: "kWh"
+
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.manual_battery_charge_limit
+      data:
+        value: >-
+          {% if wyniki_pakiet.split('###')[8] == 'ON' %}
+            {{ wyniki_pakiet.split('###')[0] | float }}
+          {% else %}
+            20
+          {% endif %}
+
+    - delay: "00:00:03"
+
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ wyniki_pakiet.split('###')[8] == 'ON' }}"
+          sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.battery_charge_from_grid
+
+    - service: notify.persistent_notification
+      data:
+        title: "RANO 06-13 | GRID: {{ wyniki_pakiet.split('###')[8] }} | TRYB: {{ wyniki_pakiet.split('###')[26] }}"
+        message: |-
+          TRYB: {{ wyniki_pakiet.split('###')[26] }}
+          Cel limitu ładowania rano: {{ wyniki_pakiet.split('###')[0] }}%
+          Minimalne doładowanie z sieci: {{ wyniki_pakiet.split('###')[1] }} kWh
+
+          Prognoza PV dziś: {{ wyniki_pakiet.split('###')[9] }} kWh
+          Wymuszenie FULL (PV < 8 kWh): {{ wyniki_pakiet.split('###')[10] }}
+
+          Stan o 03:00:
+          - E0_u (teraz): {{ wyniki_pakiet.split('###')[11] }} kWh
+          - SOC: {{ wyniki_pakiet.split('###')[12] }}%
+
+          Cel na 13:00:
+          - target SOC: {{ wyniki_pakiet.split('###')[13] }}%
+          - target_u_13: {{ wyniki_pakiet.split('###')[14] }} kWh
+          - E6_required dla targetu: {{ wyniki_pakiet.split('###')[15] }} kWh
+          - E6_safe_max bez spillu: {{ wyniki_pakiet.split('###')[16] }} kWh
+          - Czy target osiągalny bez spillu: {{ wyniki_pakiet.split('###')[17] }}
+
+          Obrona minimum w oknie:
+          - E6_required dla >=25%: {{ wyniki_pakiet.split('###')[3] }} kWh
+          - Najgorsze saldo (Smin_post): {{ wyniki_pakiet.split('###')[4] }} kWh
+          - Godzina minimum: {{ wyniki_pakiet.split('###')[5] }}:00
+
+          EKSTRA DOŁADOWANIE POD PORANNY EKSPORT:
+          - Funkcja: {{ wyniki_pakiet.split('###')[18] }}
+          - Status: {{ wyniki_pakiet.split('###')[24] }}
+          - Extra charge: {{ wyniki_pakiet.split('###')[19] }} kWh
+          - Planowana energia z baterii rano: {{ wyniki_pakiet.split('###')[20] }} kWh
+          - Obecny budżet eksportowy: {{ wyniki_pakiet.split('###')[21] }} kWh
+          - Maksymalny budżet eksportowy: {{ wyniki_pakiet.split('###')[22] }} kWh
+          - Limit dzienny: {{ wyniki_pakiet.split('###')[23] }} kWh
+
+          Najlepsze wybrane sloty:
+          {{ wyniki_pakiet.split('###')[25] if wyniki_pakiet.split('###')[25] | length > 0 else 'brak' }}
+
+          Spill PV (od 06:00): {{ wyniki_pakiet.split('###')[6] }} kWh
+
+          {% if wyniki_pakiet.split('###')[10] == 'YES' %}
+          ⚠️ TRYB AWARYJNY: prognoza PV dziś < 8kWh → wymuszam ładowanie do 100%
+          {% endif %}
+
+          Raport:
+          {{ wyniki_pakiet.split('###')[7] }}
+
+- id: magazyn_stop_ladowania_rano
+  alias: "Magazyn: Stop ładowania porannego (06:00)"
+  description: "Wyłącza ładowanie z sieci i resetuje limit ładowania o 6 rano."
+  mode: single
+  trigger:
+    - platform: time
+      at: "05:59:00"
+  condition: []
+  action:
+    - alias: "Wyłącz ładowanie z sieci"
+      service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.battery_charge_from_grid
+    - alias: "Ustaw domyślny limit na 20%"
+      service: input_number.set_value
+      target:
+        entity_id: input_number.manual_battery_charge_limit
+      data:
+        value: 20
+
+
+  ###############################################################################
+  # POPOŁUDNIOWE ŁADOWANIE MAGAZYNU (13:00–15:00 -> przetrwanie do 22:00)
+  # v10:
+  # - LOWPV smart
+  # - blokada spill
+  # - opcjonalne doładowanie pod wieczorny eksport
+  # - watchdog stop ładowania z sieci wg PV netto do końca dnia * 0.9
+  # - notyfikacja z celem bazowym i finalnym
+  ###############################################################################
+
+
+- alias: "Magazyn: POPOŁUDNIE (13-21) dotrwaj do 22:00 >=25% v10"
+  id: magazyn_popoludnie_min25_13_21_v10
+  mode: single
+  description: >
+    POPOŁUDNIE: Dobiera minimalne doładowanie z sieci, aby w oknie 13–21 nie spaść
+    poniżej 25% SOC, czyli dotrwać do 22:00.
+    LOWPV SMART: jeśli pozostała prognoza PV < 8kWh, to ładuj do 100% tylko wtedy,
+    gdy skorygowany forecast PV nie wystarczy na:
+    1) doładowanie baterii do 100%
+    2) planowaną konsumpcję od teraz do 15:00.
+    Dodatkowo:
+    - opcjonalne extra doładowanie pod wieczorny eksport
+    - watchdog stop ładowania z sieci na podstawie dodatniego PV netto do końca dnia * 0.9
+    - SOC stop liczony dopiero po uwzględnieniu doładowania pod oddawanie.
+
+  trigger:
+    - platform: time
+      at: "13:00:00"
+    - platform: time
+      at: "14:00:00"
+    - platform: time
+      at: "14:30:00"
+    - platform: time
+      at: "14:45:00"
+
+  condition: []
+
+  action:
+    - variables:
+        tz_to: "{{ now().strftime('%z')[0:3] ~ ':' ~ now().strftime('%z')[3:5] }}"
+        sql_query: >
+          SELECT
+            HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) AS h,
+            AVG(CAST(s.state AS DECIMAL(10,3))) AS avg_h
+          FROM states s
+          JOIN states_meta m ON s.metadata_id = m.metadata_id
+          WHERE m.entity_id = 'sensor.srednie_zuzycie_o_obecnej_godzinie'
+            AND s.state NOT IN ('unknown', 'unavailable', '')
+            AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 604800)
+            AND HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) BETWEEN 13 AND 21
+          GROUP BY h
+          ORDER BY h;
+
+    - service: sql.query
+      data:
+        query: "{{ sql_query }}"
+      response_variable: statystyki_godzinowe
+
+    - variables:
+        wyniki_pakiet: >-
+          {% set soc_akt = states('sensor.solarman_battery_safe') | float(25) %}
+          {% set pojemnosc_kwh = 15.0 %}
+          {% set prog_min_kwh = 3.0 %}
+          {% set zapas_kwh = 0.75 %}
+          {% set dzis = now().date() %}
+          {% set current_hour = now().hour %}
+          {% set current_minute = now().minute %}
+          {% set current_second = now().second %}
+          {% set frac_current_hour_left = ((3600 - (current_minute * 60 + current_second)) / 3600) %}
+          {% if frac_current_hour_left < 0 %}{% set frac_current_hour_left = 0 %}{% endif %}
+          {% if frac_current_hour_left > 1 %}{% set frac_current_hour_left = 1 %}{% endif %}
+
+          {% set max_ene_u = (pojemnosc_kwh - prog_min_kwh) %}
+          {% set E0_u = ((soc_akt / 100) * pojemnosc_kwh - prog_min_kwh) %}
+          {% if E0_u < 0 %}{% set E0_u = 0 %}{% endif %}
+          {% if E0_u > max_ene_u %}{% set E0_u = max_ene_u %}{% endif %}
+
+          {# ===== Korekta PV ===== #}
+          {% set pv_5m = states('sensor.srednia_moc_z_pv_5_minut') | float(0) %}
+          {% set pv_30m_fc = states('sensor.solcast_pv_forecast_moc_w_30_minut') | float(0) %}
+          {% set k_raw = (pv_5m / pv_30m_fc) if pv_30m_fc > 0 else 1.0 %}
+          {% set k = (k_raw if pv_5m < pv_30m_fc else 1.0) %}
+          {% set k = [[k, 0.2] | max, 1.0] | min %}
+
+          {% set solcast_pozostalo_org = states('sensor.solcast_pv_forecast_pozostala_prognoza_na_dzis') | float(0) %}
+          {% set solcast_pozostalo = solcast_pozostalo_org * k %}
+          {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedHourly') or [] %}
+
+          {# ===== SQL rows -> dict_z ===== #}
+          {% set rows = statystyki_godzinowe['result'] if (statystyki_godzinowe is mapping and 'result' in statystyki_godzinowe) else [] %}
+          {% set nsd = namespace(d={}) %}
+          {% for row in rows %}
+            {% set nsd.d = nsd.d | combine({ (row['h'] | string): (row['avg_h'] | float) }) %}
+          {% endfor %}
+          {% set dict_z = nsd.d %}
+
+          {# ===== Konsumpcja od TERAZ do 15:00 ===== #}
+          {% set ns_pre15 = namespace(cons=0.0, txt="") %}
+          {% for h in range(13, 15) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 1.15 %}
+
+            {% if h < current_hour %}
+              {% set frac = 0 %}
+            {% elif h == current_hour %}
+              {% if current_hour < 15 %}
+                {% set frac = frac_current_hour_left %}
+              {% else %}
+                {% set frac = 0 %}
+              {% endif %}
+            {% else %}
+              {% if h < 15 %}
+                {% set frac = 1 %}
+              {% else %}
+                {% set frac = 0 %}
+              {% endif %}
+            {% endif %}
+
+            {% set cons_part = z_h * frac %}
+            {% set ns_pre15.cons = ns_pre15.cons + cons_part %}
+            {% set ns_pre15.txt = ns_pre15.txt ~
+              "\nPRE15 h" ~ h ~
+              " | Z:" ~ z_h|round(2) ~
+              " | frac:" ~ frac|round(3) ~
+              " | cons:" ~ cons_part|round(2)
+            %}
+          {% endfor %}
+          {% set cons_to_15_from_now = ns_pre15.cons %}
+
+          {# ===== Ile brakuje do 100% od aktualnego SOC ===== #}
+          {% set batt_now_kwh = (soc_akt / 100) * pojemnosc_kwh %}
+          {% set batt_to_full_kwh = pojemnosc_kwh - batt_now_kwh %}
+          {% if batt_to_full_kwh < 0 %}{% set batt_to_full_kwh = 0 %}{% endif %}
+
+          {# ===== Czy forecast po korekcie od teraz wystarczy na full + konsumpcję do 15:00 ===== #}
+          {% set pv_wystarczy_na_full_i_pre15 = (solcast_pozostalo >= (batt_to_full_kwh + cons_to_15_from_now)) %}
+
+          {# ===== Saldo pre (od teraz do 15:00) i post (15-22) ===== #}
+          {% set ns = namespace(S_pre=0.0, S_post=0.0, Smin_post=0.0, h_min=15, spill=0.0, raport="") %}
+          {% set ns.raport = "G:START | E_u:" ~ E0_u|round(2) ~ "kWh | SOC:" ~ soc_akt|round(1) ~ "% | TZ:" ~ now().strftime('%z') %}
+          {% set ns.raport = ns.raport ~ "\nPV korekta: k=" ~ k|round(3) ~ " | PV5m=" ~ pv_5m|round(0) ~ "W | PV30m_fc=" ~ pv_30m_fc|round(0) ~ "W | pozostało org=" ~ solcast_pozostalo_org|round(2) ~ "kWh | pozostało*=" ~ solcast_pozostalo|round(2) ~ "kWh" %}
+          {% set ns.raport = ns.raport ~ "\nSQL rows:" ~ (rows|length) ~ " | dict_z:" ~ dict_z %}
+          {% set ns.raport = ns.raport ~ "\nAktualna godzina: " ~ current_hour ~ ":" ~ "%02d"|format(current_minute) %}
+          {% set ns.raport = ns.raport ~ "\nDo 15:00 | konsumpcja od teraz: " ~ cons_to_15_from_now|round(2) ~ "kWh | brak do 100%: " ~ batt_to_full_kwh|round(2) ~ "kWh | forecast skoryg. wystarczy?: " ~ ('TAK' if pv_wystarczy_na_full_i_pre15 else 'NIE') %}
+          {% set ns.raport = ns.raport ~ ns_pre15.txt %}
+
+          {% for h in range(13, 22) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 1.15 %}
+
+            {% set pv = namespace(v=0.0) %}
+            {% for item in forecast_data %}
+              {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
+              {% if ts.date() == dzis and ts.hour == h %}
+                {% set pv.v = (item.pv_estimate or item.pv_forecast or 0) | float %}
+              {% endif %}
+            {% endfor %}
+
+            {% set pv_corr = pv.v * k %}
+            {% set delta = (pv_corr - z_h) %}
+
+            {% if h < 15 %}
+              {% if h > current_hour %}
+                {% set ns.S_pre = ns.S_pre + delta %}
+                {% set ns.raport = ns.raport ~
+                  "\nG:" ~ "%02d"|format(h) ~
+                  " | Z:" ~ z_h|round(2) ~
+                  " | PV:" ~ pv.v|round(2) ~
+                  " | PV*:" ~ pv_corr|round(2) ~
+                  " | d:" ~ delta|round(2) ~
+                  " | Spre:" ~ ns.S_pre|round(2) ~
+                  " (pre-window full)"
+                %}
+              {% elif h == current_hour %}
+                {% set delta_partial = ((pv_corr - z_h) * frac_current_hour_left) %}
+                {% set ns.S_pre = ns.S_pre + delta_partial %}
+                {% set ns.raport = ns.raport ~
+                  "\nG:" ~ "%02d"|format(h) ~
+                  " | Z:" ~ z_h|round(2) ~
+                  " | PV:" ~ pv.v|round(2) ~
+                  " | PV*:" ~ pv_corr|round(2) ~
+                  " | d_full:" ~ delta|round(2) ~
+                  " | frac:" ~ frac_current_hour_left|round(3) ~
+                  " | d_now->15:" ~ delta_partial|round(2) ~
+                  " | Spre:" ~ ns.S_pre|round(2) ~
+                  " (pre-window partial)"
+                %}
+              {% else %}
+                {% set ns.raport = ns.raport ~
+                  "\nG:" ~ "%02d"|format(h) ~
+                  " | POMINIĘTO (już minęło)"
+                %}
+              {% endif %}
+            {% else %}
+              {% set ns.S_post = ns.S_post + delta %}
+              {% if ns.S_post < ns.Smin_post %}
+                {% set ns.Smin_post = ns.S_post %}
+                {% set ns.h_min = h %}
+              {% endif %}
+
+              {% set Eu_raw = E0_u + ns.S_pre + ns.S_post %}
+              {% if Eu_raw > max_ene_u %}
+                {% set Eu_show = max_ene_u %}
+                {% set ns.spill = ns.spill + (Eu_raw - max_ene_u) %}
+              {% elif Eu_raw < 0 %}
+                {% set Eu_show = 0 %}
+              {% else %}
+                {% set Eu_show = Eu_raw %}
+              {% endif %}
+
+              {% set w_soc = ((((Eu_show + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0)) | int %}
+              {% if w_soc < 0 %}{% set w_soc = 0 %}{% endif %}
+              {% if w_soc > 100 %}{% set w_soc = 100 %}{% endif %}
+
+              {% set ns.raport = ns.raport ~
+                "\nG:" ~ "%02d"|format(h) ~
+                " | Z:" ~ z_h|round(2) ~
+                " | PV:" ~ pv.v|round(2) ~
+                " | PV*:" ~ pv_corr|round(2) ~
+                " | d:" ~ delta|round(2) ~
+                " | Spost:" ~ ns.S_post|round(2) ~
+                " | E_u:" ~ Eu_show|round(2) ~
+                " | SOC:" ~ w_soc ~ "%"
+              %}
+            {% endif %}
+          {% endfor %}
+
+          {# ===== Stan na 15:00 (bez grid) ===== #}
+          {% set E15_base = E0_u + ns.S_pre %}
+          {% if E15_base > max_ene_u %}{% set E15_base = max_ene_u %}{% endif %}
+          {% if E15_base < 0 %}{% set E15_base = 0 %}{% endif %}
+
+          {# ===== Minimalne E_u w oknie 15-22 ===== #}
+          {% set E_min_w_oknie = E15_base + ns.Smin_post %}
+
+          {# ===== TRYB NISKIE PV ===== #}
+          {% set pv_low_base = (solcast_pozostalo > 0 and solcast_pozostalo < 8.0) %}
+          {% set pv_low = (pv_low_base and not pv_wystarczy_na_full_i_pre15) %}
+
+          {# ===== BLOKADA SPILL ===== #}
+          {% set blokada_spill = (ns.spill > 0.1) %}
+
+          {# ===== Bazowe wyliczenie ładowania ===== #}
+          {% if blokada_spill %}
+            {% set grid_add_base_u = 0.0 %}
+            {% set czy_ladowac = false %}
+            {% set cel_base = 20 %}
+            {% set E15_required = 0.0 %}
+            {% set powod = 'SPILL_BLOCK' %}
+          {% elif E_min_w_oknie >= zapas_kwh %}
+            {% set grid_add_base_u = 0.0 %}
+            {% set czy_ladowac = false %}
+            {% set cel_base = 20 %}
+            {% set E15_required = 0.0 %}
+            {% set powod = 'BATTERY_OK' %}
+          {% else %}
+            {% set E15_required = zapas_kwh - ns.Smin_post %}
+            {% if E15_required < 0 %}{% set E15_required = 0 %}{% endif %}
+
+            {% set grid_add_base_u = [E15_required - E15_base, 0] | max %}
+            {% set grid_add_base_u = [grid_add_base_u, (max_ene_u - E15_base)] | min %}
+            {% if grid_add_base_u < 0 %}{% set grid_add_base_u = 0 %}{% endif %}
+
+            {% set czy_ladowac = (grid_add_base_u > 0.01) %}
+            {% set E_start_u_new = E15_base + grid_add_base_u %}
+            {% set cel_base = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+            {% if cel_base < 25 %}{% set cel_base = 25 %}{% endif %}
+            {% if cel_base > 100 %}{% set cel_base = 100 %}{% endif %}
+            {% set powod = 'NORMAL' %}
+          {% endif %}
+
+          {% set grid_add_u = grid_add_base_u %}
+          {% set cel = cel_base %}
+
+          {# ===== LOWPV SMART ===== #}
+          {% if pv_low and not blokada_spill %}
+            {% set cel = 100 %}
+            {% set czy_ladowac = true %}
+            {% set powod = 'LOWPV' %}
+          {% endif %}
+
+          {# ===== ETAP 2: doładowanie pod wieczorny eksport ===== #}
+          {% set export_topup_enabled = is_state('input_boolean.magazyn_doladowanie_pod_eksport_wieczor', 'on') %}
+          {% set limit_dzienny = states('sensor.aktualny_limit_dzienny') | float(0) %}
+
+          {% set E15_after_base = E15_base + grid_add_u %}
+          {% if E15_after_base < 0 %}{% set E15_after_base = 0 %}{% endif %}
+          {% if E15_after_base > max_ene_u %}{% set E15_after_base = max_ene_u %}{% endif %}
+
+          {% set export_extra_u = 0.0 %}
+          {% set export_plan_batt_sum = 0.0 %}
+          {% set export_required_total_u = 0.0 %}
+          {% set export_reason = 'SKIP' %}
+          {% set export_plan_lines = '' %}
+
+          {% if export_topup_enabled and cel < 100 and not blokada_spill %}
+            {% set koszt_drozsza = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) %}
+            {% set koszt_tansza = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0) %}
+            {% set min_zysk_sprzedaz = states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0) %}
+            {% set prog_czesciowy = koszt_tansza + min_zysk_sprzedaz %}
+            {% set prog_pelny = koszt_drozsza + min_zysk_sprzedaz %}
+            {% set soc_floor_pct = states('var.magazyn_soc_floor_percent') | float(20) %}
+            {% set soc_comfort_pct = states('var.magazyn_soc_comfort_percent') | float(25) %}
+            {% set max_moc_rozladowania_kw = states('var.magazyn_max_moc_rozladowania_kw') | float(6) %}
+            {% set cons_mult = states('var.magazyn_konsumpcja_multiplier') | float(1.15) %}
+            {% set cons_default = states('var.magazyn_konsumpcja_default_kwh_h') | float(1.5) %}
+            {% set ceny_data = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
+
+            {% set floor_kwh_evening = pojemnosc_kwh * soc_floor_pct / 100 %}
+            {% set E_reserve_u_evening = (pojemnosc_kwh * soc_comfort_pct / 100) - floor_kwh_evening %}
+            {% if E_reserve_u_evening < 0 %}{% set E_reserve_u_evening = 0 %}{% endif %}
+            {% if E_reserve_u_evening > max_ene_u %}{% set E_reserve_u_evening = max_ene_u %}{% endif %}
+
+            {% set battery_slot_u_full = max_moc_rozladowania_kw * 0.25 %}
+            {% if battery_slot_u_full < 0 %}{% set battery_slot_u_full = 0 %}{% endif %}
+
+            {% set ns_cons15 = namespace(total=0.0) %}
+            {% for h in range(15, 22) %}
+              {% set z_h = (dict_z[h|string] | default(cons_default)) * cons_mult %}
+              {% set ns_cons15.total = ns_cons15.total + z_h %}
+            {% endfor %}
+            {% set cons_15_22 = ns_cons15.total %}
+
+            {% set ns_pv15 = namespace(total=0.0, d={}) %}
+            {% for h in range(15, 22) %}
+              {% set pv = namespace(v=0.0) %}
+              {% for item in forecast_data %}
+                {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
+                {% if ts.date() == dzis and ts.hour == h %}
+                  {% set pv.v = (item.pv_estimate or item.pv_forecast or 0) | float %}
+                {% endif %}
+              {% endfor %}
+              {% set pv_corr_h = pv.v * k %}
+              {% set ns_pv15.total = ns_pv15.total + pv_corr_h %}
+              {% set ns_pv15.d = ns_pv15.d | combine({ h: pv_corr_h }) %}
+            {% endfor %}
+            {% set pv_15_22 = ns_pv15.total %}
+            {% set pv_d_15_22 = ns_pv15.d %}
+
+            {% set energia_dom_z_baterii_do_22 = cons_15_22 - pv_15_22 %}
+            {% if energia_dom_z_baterii_do_22 < 0 %}{% set energia_dom_z_baterii_do_22 = 0 %}{% endif %}
+
+            {% set E_required_partial_evening = energia_dom_z_baterii_do_22 + E_reserve_u_evening %}
+            {% set sellable_full_now_evening = E15_after_base %}
+            {% if sellable_full_now_evening < 0 %}{% set sellable_full_now_evening = 0 %}{% endif %}
+
+            {% set ns_slots = namespace(full=[], partial=[]) %}
+            {% for c in ceny_data %}
+              {% if c is mapping and c.period is defined %}
+                {% set p = (c.period | string).replace('–', '-') %}
+                {% set p2 = p.replace(' ', '') %}
+                {% if '-' in p2 %}
+                  {% set parts = p2.split('-') %}
+                  {% set start = parts[0] %}
+                  {% set hm = start.split(':') %}
+                  {% if hm | length == 2 %}
+                    {% set h = hm[0] | int %}
+                    {% set price_kwh = (c.rce_pln | float(0)) / 1000 %}
+                    {% if h >= 15 and h < 22 and price_kwh >= prog_czesciowy %}
+                      {% set pv_h = pv_d_15_22.get(h, 0) %}
+                      {% set z_h = (dict_z[h|string] | default(cons_default)) * cons_mult %}
+                      {% set base_delta_slot = (pv_h - z_h) / 4 %}
+                      {% if price_kwh >= prog_pelny %}
+                        {% set ns_slots.full = ns_slots.full + [{
+                          'period': c.period,
+                          'price_mwh': (c.rce_pln | float(0)),
+                          'price_kwh': price_kwh,
+                          'base_delta': base_delta_slot,
+                          'batt_cap': battery_slot_u_full,
+                          'mode': 'full'
+                        }] %}
+                      {% else %}
+                        {% set ns_slots.partial = ns_slots.partial + [{
+                          'period': c.period,
+                          'price_mwh': (c.rce_pln | float(0)),
+                          'price_kwh': price_kwh,
+                          'base_delta': base_delta_slot,
+                          'batt_cap': battery_slot_u_full,
+                          'mode': 'partial'
+                        }] %}
+                      {% endif %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% set full_sorted = ns_slots.full | sort(attribute='price_kwh', reverse=true) %}
+            {% set partial_sorted = ns_slots.partial | sort(attribute='price_kwh', reverse=true) %}
+
+            {% set nsFull = namespace(rem=sellable_full_now_evening, batt_sum=0.0, lines='') %}
+            {% for s in full_sorted %}
+              {% if nsFull.rem > 0.001 %}
+                {% set batt_use = [s.batt_cap, nsFull.rem] | min %}
+                {% if batt_use < 0 %}{% set batt_use = 0 %}{% endif %}
+                {% if batt_use > 0 %}
+                  {% set nsFull.rem = nsFull.rem - batt_use %}
+                  {% set nsFull.batt_sum = nsFull.batt_sum + batt_use %}
+                  {% set nsFull.lines = nsFull.lines ~
+                    "\n- " ~ s.period ~
+                    " | FULL | " ~ (s.price_mwh | round(1)) ~ " PLN/MWh" ~
+                    " | bat:" ~ (batt_use | round(3)) ~ " kWh"
+                  %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% set E_after_full = E15_after_base - nsFull.batt_sum %}
+            {% if E_after_full < 0 %}{% set E_after_full = 0 %}{% endif %}
+
+            {% set sellable_partial_after_full = E_after_full - E_required_partial_evening %}
+            {% if sellable_partial_after_full < 0 %}{% set sellable_partial_after_full = 0 %}{% endif %}
+
+            {% set nsPart = namespace(rem=sellable_partial_after_full, batt_sum=0.0, lines='') %}
+            {% for s in partial_sorted %}
+              {% if nsPart.rem > 0.001 %}
+                {% set batt_use = [s.batt_cap, nsPart.rem] | min %}
+                {% if batt_use < 0 %}{% set batt_use = 0 %}{% endif %}
+                {% if batt_use > 0 %}
+                  {% set nsPart.rem = nsPart.rem - batt_use %}
+                  {% set nsPart.batt_sum = nsPart.batt_sum + batt_use %}
+                  {% set nsPart.lines = nsPart.lines ~
+                    "\n- " ~ s.period ~
+                    " | PARTIAL | " ~ (s.price_mwh | round(1)) ~ " PLN/MWh" ~
+                    " | bat:" ~ (batt_use | round(3)) ~ " kWh"
+                  %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% set export_plan_batt_sum = nsFull.batt_sum + nsPart.batt_sum %}
+            {% set export_required_total_u = E_required_partial_evening + export_plan_batt_sum %}
+            {% set export_plan_lines = nsFull.lines ~ nsPart.lines %}
+            {% set has_export_slots = (export_plan_batt_sum > 0.01) %}
+
+            {% if not has_export_slots %}
+              {% set export_reason = 'NO_SLOTS' %}
+            {% else %}
+              {% set export_missing_u = export_required_total_u - E15_after_base %}
+              {% if export_missing_u < 0 %}{% set export_missing_u = 0 %}{% endif %}
+
+              {% set export_extra_u = [export_missing_u, limit_dzienny] | min %}
+              {% set export_extra_u = [export_extra_u, (max_ene_u - E15_after_base)] | min %}
+              {% if export_extra_u < 0 %}{% set export_extra_u = 0 %}{% endif %}
+
+              {% if export_extra_u > 0.01 %}
+                {% set grid_add_u = grid_add_u + export_extra_u %}
+                {% if grid_add_u > (max_ene_u - E15_base) %}
+                  {% set grid_add_u = (max_ene_u - E15_base) %}
+                {% endif %}
+                {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
+
+                {% set E_start_u_new = E15_base + grid_add_u %}
+                {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+                {% if cel < 25 %}{% set cel = 25 %}{% endif %}
+                {% if cel > 100 %}{% set cel = 100 %}{% endif %}
+                {% set czy_ladowac = (grid_add_u > 0.01) %}
+                {% set powod = powod ~ '+EXPORT' %}
+                {% set export_reason = 'ADD_EXPORT_TOPUP' %}
+              {% else %}
+                {% set export_reason = 'NO_EXTRA_TOPUP' %}
+              {% endif %}
+            {% endif %}
+          {% else %}
+            {% if not export_topup_enabled %}
+              {% set export_reason = 'FEATURE_OFF' %}
+            {% elif cel >= 100 %}
+              {% set export_reason = 'SKIP_CEL_100' %}
+            {% elif blokada_spill %}
+              {% set export_reason = 'SKIP_SPILL' %}
+            {% else %}
+              {% set export_reason = 'SKIP_OTHER' %}
+            {% endif %}
+          {% endif %}
+
+          {# ===== Finalizacja celów i ilości po extra-topup ===== #}
+          {% set cel_final = cel %}
+          {% set grid_add_total_u = grid_add_u %}
+          {% set grid_add_export_u = export_extra_u %}
+
+          {% set grid_add_base_pct = (((E15_base + grid_add_base_u + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
+          {% if grid_add_base_pct < 20 %}{% set grid_add_base_pct = 20 %}{% endif %}
+          {% if grid_add_base_pct > 100 %}{% set grid_add_base_pct = 100 %}{% endif %}
+
+          {% set grid_add_total_pct = (((E15_base + grid_add_total_u + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
+          {% if grid_add_total_pct < 20 %}{% set grid_add_total_pct = 20 %}{% endif %}
+          {% if grid_add_total_pct > 100 %}{% set grid_add_total_pct = 100 %}{% endif %}
+
+          {# ===== SOC STOP dla watchdoga: liczony PO extra topup pod oddawanie ===== #}
+          {% set ns_stop = namespace(pv_credit_u=0.0, lines='') %}
+          {% set pv_credit_factor = 0.9 %}
+
+          {% for h in range(current_hour, 22) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 1.15 %}
+
+            {% set pv = namespace(v=0.0) %}
+            {% for item in forecast_data %}
+              {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
+              {% if ts.date() == dzis and ts.hour == h %}
+                {% set pv.v = (item.pv_estimate or item.pv_forecast or 0) | float %}
+              {% endif %}
+            {% endfor %}
+
+            {% set pv_corr = pv.v * k %}
+
+            {% if h < current_hour %}
+              {% set frac = 0 %}
+            {% elif h == current_hour %}
+              {% set frac = frac_current_hour_left %}
+            {% else %}
+              {% set frac = 1 %}
+            {% endif %}
+
+            {% set net_slot = (pv_corr - z_h) * frac %}
+            {% set pv_credit_slot = [net_slot, 0] | max %}
+            {% set ns_stop.pv_credit_u = ns_stop.pv_credit_u + pv_credit_slot %}
+            {% set ns_stop.lines = ns_stop.lines ~
+              "\nSTOP h" ~ h ~
+              " | Z:" ~ z_h|round(2) ~
+              " | PV*:" ~ pv_corr|round(2) ~
+              " | frac:" ~ frac|round(3) ~
+              " | credit:" ~ pv_credit_slot|round(2)
+            %}
+          {% endfor %}
+
+          {% set pv_credit_effective_u = ns_stop.pv_credit_u * pv_credit_factor %}
+
+          {% set E_target_u = (((cel_final | float) / 100) * pojemnosc_kwh) - prog_min_kwh %}
+          {% if E_target_u < 0 %}{% set E_target_u = 0 %}{% endif %}
+          {% if E_target_u > max_ene_u %}{% set E_target_u = max_ene_u %}{% endif %}
+
+          {% set E_stop_u = E_target_u - pv_credit_effective_u %}
+          {% if E_stop_u < 0 %}{% set E_stop_u = 0 %}{% endif %}
+          {% if E_stop_u > E_target_u %}{% set E_stop_u = E_target_u %}{% endif %}
+
+          {% set soc_stop_grid = (((E_stop_u + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
+          {% if soc_stop_grid < 20 %}{% set soc_stop_grid = 20 %}{% endif %}
+          {% if soc_stop_grid > 100 %}{% set soc_stop_grid = 100 %}{% endif %}
+
+          {% set ns.raport = ns.raport ~
+            "\nEXPORT_TOPUP | feature:" ~ ('ON' if export_topup_enabled else 'OFF') ~
+            " | reason:" ~ export_reason ~
+            " | extra:" ~ export_extra_u|round(2) ~ "kWh" ~
+            " | plan_batt:" ~ export_plan_batt_sum|round(2) ~ "kWh" ~
+            " | required_total:" ~ export_required_total_u|round(2) ~ "kWh" ~
+            " | limit:" ~ limit_dzienny|round(2) ~ "kWh"
+          %}
+          {% set ns.raport = ns.raport ~
+            "\nSTOP_GRID | soc_stop:" ~ soc_stop_grid ~ "%" ~
+            " | pv_credit_raw:" ~ ns_stop.pv_credit_u|round(2) ~ "kWh" ~
+            " | pv_credit_eff:" ~ pv_credit_effective_u|round(2) ~ "kWh"
+          %}
+          {% set ns.raport = ns.raport ~ ns_stop.lines %}
+
+          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ ns.h_min }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_soc_stop_ladowanie_popoludnie
+        value: "{{ wyniki_pakiet.split('###')[31] | float(100) }}"
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          pv_credit_raw_kwh: "{{ wyniki_pakiet.split('###')[32] | float(0) }}"
+          pv_credit_effective_kwh: "{{ wyniki_pakiet.split('###')[33] | float(0) }}"
+          target_base_soc: "{{ wyniki_pakiet.split('###')[0] | float(0) }}"
+          target_final_soc: "{{ wyniki_pakiet.split('###')[1] | float(0) }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.manual_battery_charge_limit
+      data:
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ wyniki_pakiet.split('###')[1] | float }}
+          {% else %}
+            20
+          {% endif %}
+
+    - delay: "00:00:03"
+
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ wyniki_pakiet.split('###')[13] == 'ON' }}"
+          sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.battery_charge_from_grid
+        - conditions:
+            - condition: template
+              value_template: "{{ wyniki_pakiet.split('###')[13] == 'OFF' }}"
+          sequence:
+            - service: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.battery_charge_from_grid
+
+    - service: notify.persistent_notification
+      data:
+        title: "POPOŁUDNIE 13-22 | GRID: {{ wyniki_pakiet.split('###')[13] }} | TRYB: {{ wyniki_pakiet.split('###')[17] }}"
+        message: |-
+          TRYB: {{ wyniki_pakiet.split('###')[17] }}
+          BLOKADA SPILL: {{ wyniki_pakiet.split('###')[21] }}
+
+          CELE:
+          - Cel bazowy bez doładowania do oddawania: {{ wyniki_pakiet.split('###')[0] }}%
+          - Cel finalny: {{ wyniki_pakiet.split('###')[1] }}%
+
+          DOŁADOWANIE Z SIECI:
+          - Bazowe doładowanie: {{ wyniki_pakiet.split('###')[2] }} kWh
+          - Extra doładowanie pod oddawanie: {{ wyniki_pakiet.split('###')[4] }} kWh
+          - Łączne doładowanie z sieci: {{ wyniki_pakiet.split('###')[3] }} kWh
+          - Do jakiego % mamy doładować bazowo: {{ wyniki_pakiet.split('###')[5] }}%
+          - Do jakiego % mamy doładować finalnie: {{ wyniki_pakiet.split('###')[6] }}%
+
+          Stan teraz:
+          - E0_u: {{ wyniki_pakiet.split('###')[18] }} kWh
+          - SOC: {{ wyniki_pakiet.split('###')[19] }}%
+
+          Stan na 15:00:
+          - E15_base (bez grid): {{ wyniki_pakiet.split('###')[7] }} kWh
+          - E15_required (żeby 15–22 nie spaść <25%): {{ wyniki_pakiet.split('###')[8] }} kWh
+          - E_min w oknie 15-22: {{ wyniki_pakiet.split('###')[20] }} kWh
+
+          LOWPV SMART:
+          - Konsumpcja od teraz do 15:00: {{ wyniki_pakiet.split('###')[22] }} kWh
+          - Brak do 100%: {{ wyniki_pakiet.split('###')[23] }} kWh
+          - Forecast skorygowany wystarczy na full + konsumpcję do 15:00: {{ wyniki_pakiet.split('###')[24] }}
+
+          EKSTRA DOŁADOWANIE POD ODDAWANIE:
+          - Funkcja: {{ wyniki_pakiet.split('###')[25] }}
+          - Status: {{ wyniki_pakiet.split('###')[29] }}
+          - Energia planu eksportowego z baterii: {{ wyniki_pakiet.split('###')[26] }} kWh
+          - Łączna energia wymagana na plan wieczorny: {{ wyniki_pakiet.split('###')[27] }} kWh
+          - Limit dzienny: {{ wyniki_pakiet.split('###')[28] }} kWh
+
+          Najlepsze wybrane sloty:
+          {{ wyniki_pakiet.split('###')[30] if wyniki_pakiet.split('###')[30] | length > 0 else 'brak' }}
+
+          WATCHDOG STOP GRID:
+          - SOC stop ładowania z sieci: {{ wyniki_pakiet.split('###')[31] }}%
+          - PV credit do końca dnia: {{ wyniki_pakiet.split('###')[32] }} kWh
+          - PV credit efektywny (x0.9): {{ wyniki_pakiet.split('###')[33] }} kWh
+
+          Okno 15–22:
+          - Najgorsze saldo (Smin_post): {{ wyniki_pakiet.split('###')[9] }} kWh
+          - Godzina minimum: {{ wyniki_pakiet.split('###')[10] }}:00
+          - Spill PV (od 15:00): {{ wyniki_pakiet.split('###')[11] }} kWh
+
+          Korekta PV:
+          - k = {{ wyniki_pakiet.split('###')[14] }}
+          - Pozostało PV (org): {{ wyniki_pakiet.split('###')[15] }} kWh
+          - Pozostało PV (skoryg.): {{ wyniki_pakiet.split('###')[16] }} kWh
+
+          {% if wyniki_pakiet.split('###')[21] == 'YES' %}
+          🚫 BLOKADA: Wykryto nadmiar PV (spill > 0) → ładowanie z sieci zablokowane
+          {% elif wyniki_pakiet.split('###')[17] == 'LOWPV' %}
+          ⚠️ TRYB AWARYJNY LOWPV: forecast skorygowany < 8kWh i nie wystarcza na full + konsumpcję do 15:00 → wymuszam ładowanie do 100%
+          {% elif wyniki_pakiet.split('###')[17] == 'BATTERY_OK' %}
+          ✅ Bateria wystarczy do 22:00 bez doładowania
+          {% elif wyniki_pakiet.split('###')[17] == 'NORMAL' or '+EXPORT' in wyniki_pakiet.split('###')[17] %}
+          🔋 Wymagane doładowanie z sieci
+          {% endif %}
+
+          Raport:
+          {{ wyniki_pakiet.split('###')[12] }}
+
+
+###############################################################################
+# WATCHDOG STOP ŁADOWANIA Z SIECI POPOŁUDNIE
+# Wyłącza battery_charge_from_grid, gdy osiągnięto SOC,
+# przy którym resztę do końca dnia dowiezie PV netto * 0.9.
+###############################################################################
+
+- alias: "Magazyn: Watchdog stop ładowania popołudnie PV"
+  id: magazyn_watchdog_stop_ladowania_popoludnie_pv
+  mode: single
+
+  trigger:
+    - platform: state
+      entity_id: sensor.solarman_battery_safe
+
+  condition:
+    - condition: time
+      after: "13:00:00"
+      before: "15:00:00"
+
+    - condition: state
+      entity_id: input_boolean.battery_charge_from_grid
+      state: "on"
+
+    - condition: template
+      value_template: >
+        {{ states('input_number.magazyn_soc_stop_ladowanie_popoludnie') | float(100) < 100 }}
+
+    - condition: template
+      value_template: >
+        {{ states('sensor.solarman_battery_safe') | float(0)
+           >= states('input_number.magazyn_soc_stop_ladowanie_popoludnie') | float(100) }}
+
+  action:
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.battery_charge_from_grid
+
+    - delay: "00:00:03"
+
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.manual_battery_charge_limit
+      data:
+        value: 20
+
+    - service: notify.persistent_notification
+      data:
+        title: "⏹️ STOP ładowania popołudniowego z sieci"
+        message: >
+          SOC baterii osiągnął próg stop:
+          - SOC teraz: {{ states('sensor.solarman_battery_safe') | float(0) | round(1) }}%
+          - SOC stop grid: {{ states('input_number.magazyn_soc_stop_ladowanie_popoludnie') | float(0) | round(1) }}%
+
+          Założenie:
+          pozostałe dodatnie PV netto do końca dnia powinno dowieźć brakującą energię
+          bez dalszego ładowania z gniazdka.
+
+- id: magazyn_stop_ladowania_popoludnie
+  alias: "Magazyn: Stop ładowania popołudniowego (15:00)"
+  description: "Wyłącza ładowanie z sieci i resetuje limit ładowania o 15:00."
+  mode: single
+  trigger:
+    - platform: time
+      at: "14:59:30"
+  condition: []
+  action:
+    - alias: "Wyłącz ładowanie z sieci"
+      service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.battery_charge_from_grid
+    - alias: "Ustaw domyślny limit na 20%"
+      service: input_number.set_value
+      target:
+        entity_id: input_number.manual_battery_charge_limit
+      data:
+        value: 20
+

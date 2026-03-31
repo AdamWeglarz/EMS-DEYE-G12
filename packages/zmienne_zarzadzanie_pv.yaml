@@ -1,0 +1,322 @@
+###############################################################################
+# MAGAZYN – VARS (snarky-snark/home-assistant-variables)
+# Definicje stałych polityki / parametrów (AS-IS) + IKONY
+###############################################################################
+
+input_boolean:
+  magazyn_doladowanie_pod_eksport_wieczor:
+    name: Magazyn - doładowanie pod eksport wieczorny
+    icon: mdi:battery-arrow-up-outline
+    initial: false
+
+  magazyn_doladowanie_pod_eksport_poranek:
+    name: Magazyn - doładowanie pod eksport poranny
+    icon: mdi:battery-arrow-up-outline
+    initial: false
+
+var:
+
+  # 1) Bateria i SOC (model + sterowanie)
+  magazyn_pojemnosc_brutto_kwh:
+    unique_id: "magazyn_pojemnosc_brutto_kwh"
+    friendly_name: "Magazyn: Pojemność brutto"
+    icon: "mdi:battery"
+    initial_value: 15.0
+    restore: true
+
+  magazyn_soc_floor_percent:
+    unique_id: "magazyn_soc_floor_percent"
+    friendly_name: "Magazyn: SOC floor (techniczny + default limit)"
+    icon: "mdi:battery-low"
+    initial_value: 20
+    restore: true
+
+  magazyn_soc_comfort_percent:
+    unique_id: "magazyn_soc_comfort_percent"
+    friendly_name: "Magazyn: SOC komfortowy (okna)"
+    icon: "mdi:battery-medium"
+    initial_value: 25
+    restore: true
+
+  magazyn_zapas_kwh:
+    unique_id: "magazyn_zapas_kwh"
+    friendly_name: "Magazyn: Zapas energii (kWh)"
+    icon: "mdi:shield-check"
+    initial_value: 0.75
+    restore: true
+
+  magazyn_soc_blokada_noc_min_percent:
+    unique_id: "magazyn_soc_blokada_noc_min_percent"
+    friendly_name: "Magazyn: Nocna blokada rozładowania min SOC (%)"
+    icon: "mdi:moon-waning-crescent"
+    initial_value: 21
+    restore: true
+
+  # 2) Zużycie / SQL / safety
+  magazyn_konsumpcja_multiplier:
+    unique_id: "magazyn_konsumpcja_multiplier"
+    friendly_name: "Magazyn: Mnożnik bezpieczeństwa zużycia"
+    icon: "mdi:calculator-variant"
+    initial_value: 1.15
+    restore: true
+
+  magazyn_konsumpcja_default_kwh_h:
+    unique_id: "magazyn_konsumpcja_default_kwh_h"
+    friendly_name: "Magazyn: Domyślne zużycie (kWh/h)"
+    icon: "mdi:home-lightning-bolt"
+    initial_value: 1.5
+    restore: true
+
+  magazyn_sql_lookback_days_ladowanie:
+    unique_id: "magazyn_sql_lookback_days_ladowanie"
+    friendly_name: "Magazyn: SQL lookback (dni) – ładowanie"
+    icon: "mdi:database-clock"
+    initial_value: 7
+    restore: true
+
+  magazyn_sql_lookback_days_spill:
+    unique_id: "magazyn_sql_lookback_days_spill"
+    friendly_name: "Magazyn: SQL lookback (dni) – spill"
+    icon: "mdi:database-clock"
+    initial_value: 60
+    restore: true
+
+  # 3) PV / LOWPV / korekta prognozy (k)
+  magazyn_lowpv_threshold_kwh:
+    unique_id: "magazyn_lowpv_threshold_kwh"
+    friendly_name: "Magazyn: LOWPV próg (kWh) – wymuś FULL"
+    icon: "mdi:weather-cloudy"
+    initial_value: 8.0
+    restore: true
+
+  magazyn_pv_k_min:
+    unique_id: "magazyn_pv_k_min"
+    friendly_name: "Magazyn: PV korekta k – min"
+    icon: "mdi:chart-line-variant"
+    initial_value: 0.2
+    restore: true
+
+  magazyn_pv_k_max:
+    unique_id: "magazyn_pv_k_max"
+    friendly_name: "Magazyn: PV korekta k – max"
+    icon: "mdi:chart-line-variant"
+    initial_value: 1.0
+    restore: true
+
+  # 4) Cykl i rama dnia
+  magazyn_cykl_anchor_hour:
+    unique_id: "magazyn_cykl_anchor_hour"
+    friendly_name: "Magazyn: Anchor cyklu (13–13) – godzina"
+    icon: "mdi:clock-outline"
+    initial_value: 13
+    restore: true
+
+  magazyn_freeze_time:
+    unique_id: "magazyn_freeze_time"
+    friendly_name: "Magazyn: Freeze (blokada rozładowania) – godzina"
+    icon: "mdi:snowflake"
+    initial_value: "22:00"
+    restore: true
+
+  # 5) Okna: RANO (ładowanie)
+  magazyn_okno_rano_trigger_start:
+    unique_id: "magazyn_okno_rano_trigger_start"
+    friendly_name: "Magazyn: RANO – start triggerów"
+    icon: "mdi:alarm"
+    initial_value: "03:00"
+    restore: true
+
+  magazyn_okno_rano_trigger_end:
+    unique_id: "magazyn_okno_rano_trigger_end"
+    friendly_name: "Magazyn: RANO – koniec triggerów"
+    icon: "mdi:alarm"
+    initial_value: "05:45"
+    restore: true
+
+  magazyn_okno_rano_calc_start_hour:
+    unique_id: "magazyn_okno_rano_calc_start_hour"
+    friendly_name: "Magazyn: RANO – start obliczeń (h)"
+    icon: "mdi:clock-start"
+    initial_value: 3
+    restore: true
+
+  magazyn_okno_rano_calc_end_hour:
+    unique_id: "magazyn_okno_rano_calc_end_hour"
+    friendly_name: "Magazyn: RANO – koniec obliczeń (h)"
+    icon: "mdi:clock-end"
+    initial_value: 13
+    restore: true
+
+  magazyn_stop_ladowania_rano_time:
+    unique_id: "magazyn_stop_ladowania_rano_time"
+    friendly_name: "Magazyn: STOP ładowania rano"
+    icon: "mdi:power-plug-off"
+    initial_value: "06:00"
+    restore: true
+
+  # 6) Okna: POPOŁUDNIE (ładowanie)
+  magazyn_okno_popoludnie_calc_start_hour:
+    unique_id: "magazyn_okno_popoludnie_calc_start_hour"
+    friendly_name: "Magazyn: POPOŁUDNIE – start obliczeń (h)"
+    icon: "mdi:clock-start"
+    initial_value: 13
+    restore: true
+
+  magazyn_okno_popoludnie_calc_end_hour:
+    unique_id: "magazyn_okno_popoludnie_calc_end_hour"
+    friendly_name: "Magazyn: POPOŁUDNIE – koniec obliczeń (h)"
+    icon: "mdi:clock-end"
+    initial_value: 22
+    restore: true
+
+  magazyn_stop_ladowania_popoludnie_time:
+    unique_id: "magazyn_stop_ladowania_popoludnie_time"
+    friendly_name: "Magazyn: STOP ładowania popołudnie"
+    icon: "mdi:power-plug-off"
+    initial_value: "15:00"
+    restore: true
+
+  # 7) Okna: SPILL PORANNY (tematy poranne)
+  magazyn_okno_spill_poranny_calc_start_hour:
+    unique_id: "magazyn_okno_spill_poranny_calc_start_hour"
+    friendly_name: "Magazyn: Spill poranny – start liczenia (h)"
+    icon: "mdi:weather-sunset-up"
+    initial_value: 6
+    restore: true
+
+  magazyn_okno_spill_poranny_calc_end_hour:
+    unique_id: "magazyn_okno_spill_poranny_calc_end_hour"
+    friendly_name: "Magazyn: Spill poranny – koniec liczenia (h)"
+    icon: "mdi:weather-sunset"
+    initial_value: 13
+    restore: true
+
+  magazyn_okno_spill_poranny_exec_start:
+    unique_id: "magazyn_okno_spill_poranny_exec_start"
+    friendly_name: "Magazyn: Spill poranny – start egzekucji"
+    icon: "mdi:transmission-tower-export"
+    initial_value: "06:00"
+    restore: true
+
+  magazyn_okno_spill_poranny_exec_end:
+    unique_id: "magazyn_okno_spill_poranny_exec_end"
+    friendly_name: "Magazyn: Spill poranny – koniec egzekucji"
+    icon: "mdi:transmission-tower-export"
+    initial_value: "11:00"
+    restore: true
+
+  # 8) Warunek cenowy spillu
+  magazyn_spill_price_min_pln_mwh:
+    unique_id: "magazyn_spill_price_min_pln_mwh"
+    friendly_name: "Magazyn: Spill – minimalna cena (PLN/MWh)"
+    icon: "mdi:cash-minus"
+    initial_value: 0
+    restore: true
+
+  # 9) Koszty taryfowe (referencje PLN/kWh)
+  magazyn_koszt_calkowity_strefa_drozsza_pln_kwh:
+    unique_id: "magazyn_koszt_calkowity_strefa_drozsza_pln_kwh"
+    friendly_name: "Koszt całkowity - strefa droższa"
+    icon: "mdi:cash"
+    initial_value: 1.03
+    restore: true
+
+  magazyn_koszt_calkowity_strefa_tansza_pln_kwh:
+    unique_id: "magazyn_koszt_calkowity_strefa_tansza_pln_kwh"
+    friendly_name: "Koszt całkowity - strefa tańsza"
+    icon: "mdi:cash"
+    initial_value: 0.65
+    restore: true
+
+  magazyn_koszt_dystrybucji_strefa_drozsza_pln_kwh:
+    unique_id: "magazyn_koszt_dystrybucji_strefa_drozsza_pln_kwh"
+    friendly_name: "Koszt dystrybucji - strefa droższa"
+    icon: "mdi:transmission-tower"
+    initial_value: 0.37
+    restore: true
+
+  magazyn_koszt_dystrybucji_strefa_tansza_pln_kwh:
+    unique_id: "magazyn_koszt_dystrybucji_strefa_tansza_pln_kwh"
+    friendly_name: "Koszt dystrybucji - strefa tańsza"
+    icon: "mdi:transmission-tower"
+    initial_value: 0.12
+    restore: true
+
+  magazyn_koszt_energii_strefa_drozsza_pln_kwh:
+    unique_id: "magazyn_koszt_energii_strefa_drozsza_pln_kwh"
+    friendly_name: "Koszt energii - strefa droższa"
+    icon: "mdi:flash"
+    initial_value: 0.66
+    restore: true
+
+  magazyn_koszt_energii_strefa_tansza_pln_kwh:
+    unique_id: "magazyn_koszt_energii_strefa_tansza_pln_kwh"
+    friendly_name: "Koszt energii - strefa tańsza"
+    icon: "mdi:flash"
+    initial_value: 0.53
+    restore: true
+
+  # 10) Sprawność baterii
+  magazyn_bateria_sprawnosc_roundtrip:
+    unique_id: "magazyn_bateria_sprawnosc_roundtrip"
+    friendly_name: "Magazyn: Sprawność baterii (round-trip)"
+    icon: "mdi:battery-sync"
+    initial_value: 0.93
+    restore: true
+
+  # 11) Minimalny zysk / spread do decyzji o sprzedaży (PLN/kWh)
+  magazyn_min_zysk_sprzedaz_pln_kwh:
+    unique_id: "magazyn_min_zysk_sprzedaz_pln_kwh"
+    friendly_name: "Magazyn: Minimalny zysk do sprzedaży (Δ taryf całkowitych)"
+    icon: "mdi:cash-plus"
+    initial_value: 0.38
+    restore: true
+
+  magazyn_spill_dzienny_kwh:
+    unique_id: "magazyn_spill_dzienny_kwh"
+    friendly_name: "Magazyn: Spill dzienny (kWh)"
+    icon: "mdi:waterfall"
+    initial_value: 0
+    restore: true
+
+  magazyn_soc_stop_export_wieczor:
+    unique_id: magazyn_soc_stop_export_wieczor
+    friendly_name: "Magazyn: SOC stop eksport wieczór"
+    icon: "mdi:stop-circle-outline"
+    initial_value: 20
+    restore: true
+
+  min_soc_dynamic_13:
+    unique_id: min_soc_dynamic_13
+    friendly_name: "Magazyn: minimalny dynamiczny SOC do 13:00"
+    icon: "mdi:battery-clock"
+    initial_value: 25
+    restore: true
+
+  magazyn_max_moc_ladowania_kw:
+    unique_id: "magazyn_max_moc_ladowania_kw"
+    friendly_name: "Magazyn: maksymalna moc ładowania (kW)"
+    icon: "mdi:battery-charging-high"
+    initial_value: 6.0
+    restore: true
+
+  magazyn_max_moc_rozladowania_kw:
+    unique_id: "magazyn_max_moc_rozladowania_kw"
+    friendly_name: "Magazyn: maksymalna moc rozładowania (kW)"
+    icon: "mdi:battery-arrow-down"
+    initial_value: 6.0
+    restore: true
+
+  magazyn_soc_stop_ladowanie_popoludnie:
+    unique_id: "magazyn_soc_stop_ladowanie_popoludnie"
+    friendly_name: "Magazyn - SOC stop ładowania popołudnie"
+    initial_value: 100
+    unit_of_measurement: "%"
+    icon: mdi:battery-stop
+
+  cel_naladowania_o_13:
+    friendly_name: "Cel naładowania o 13"
+    unique_id: cel_naladowania_o_13
+    initial_value: 50
+    icon: mdi:battery-clock
+    unit_of_measurement: "%"

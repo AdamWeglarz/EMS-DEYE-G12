@@ -1,0 +1,298 @@
+###############################################################################
+# PACKAGE: Bilans eksportu PV + magazyn + przeniesienie energii
+# Wersja: uproszczona, spójna, testowa
+###############################################################################
+
+var:
+  przeniesionaenergia:
+    friendly_name: "Przeniesiona energia"
+    icon: "mdi:battery-arrow-up"
+    initial_value: 0
+    restore: true
+
+  przeniesionaenergia_start_dnia:
+    friendly_name: "Przeniesiona energia start dnia"
+    icon: "mdi:battery-clock"
+    initial_value: 0
+    restore: true
+
+  export_rano_zamkniety:
+    friendly_name: "Export rano zamkniety"
+    icon: "mdi:transmission-tower-export"
+    initial_value: 0
+    restore: true
+
+template:
+  - binary_sensor:
+      - name: "PV ponizej 30W przez 15 minut"
+        unique_id: pv_ponizej_30w_przez_15_minut
+        delay_on:
+          minutes: 15
+        state: >
+          {{ states('sensor.solaredge_ac_power') | float(999999) < 30 }}
+
+      - name: "PV zaniklo dla logiki eksportu"
+        unique_id: pv_zaniklo_dla_logiki_eksportu
+        state: >
+          {{
+            now() >= today_at("15:00")
+            and is_state('binary_sensor.pv_ponizej_30w_przez_15_minut', 'on')
+          }}
+
+  - sensor:
+      - name: "Export rano do 13"
+        unique_id: export_rano_do_13
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >
+          {% if now() < today_at("13:00") %}
+            {{ states('sensor.solarman_daily_energy_sold') | float(0) | round(3) }}
+          {% else %}
+            {{ states('var.export_rano_zamkniety') | float(0) | round(3) }}
+          {% endif %}
+        availability: >
+          {{
+            states('sensor.solarman_daily_energy_sold') not in ['unknown', 'unavailable', 'none']
+            and states('var.export_rano_zamkniety') not in ['unknown', 'unavailable', 'none']
+          }}
+        attributes:
+          tryb: >
+            {% if now() < today_at("13:00") %}
+              live_do_13
+            {% else %}
+              snapshot_po_13
+            {% endif %}
+          eksport_live_dzienny: >
+            {{ states('sensor.solarman_daily_energy_sold') | float(0) | round(3) }}
+          eksport_snapshot: >
+            {{ states('var.export_rano_zamkniety') | float(0) | round(3) }}
+
+      - name: "Export rano pokryty przeniesieniem"
+        unique_id: export_rano_pokryty_przeniesieniem
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >
+          {% set export_rano = states('sensor.export_rano_do_13') | float(0) %}
+          {% set przeniesione_start = states('var.przeniesionaenergia_start_dnia') | float(0) %}
+          {{ [export_rano, przeniesione_start] | min | round(3) }}
+        availability: >
+          {{
+            states('sensor.export_rano_do_13') not in ['unknown', 'unavailable', 'none']
+            and states('var.przeniesionaenergia_start_dnia') not in ['unknown', 'unavailable', 'none']
+          }}
+
+      - name: "Export rano pokryty PV"
+        unique_id: export_rano_pokryty_pv
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >
+          {% set export_rano = states('sensor.export_rano_do_13') | float(0) %}
+          {% set przeniesione_start = states('var.przeniesionaenergia_start_dnia') | float(0) %}
+          {{ [export_rano - przeniesione_start, 0] | max | round(3) }}
+        availability: >
+          {{
+            states('sensor.export_rano_do_13') not in ['unknown', 'unavailable', 'none']
+            and states('var.przeniesionaenergia_start_dnia') not in ['unknown', 'unavailable', 'none']
+          }}
+
+      - name: "Export po 13"
+        unique_id: export_po_13
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >
+          {% set export_dzien = states('sensor.solarman_daily_energy_sold') | float(0) %}
+          {% set export_rano = states('var.export_rano_zamkniety') | float(0) %}
+
+          {% if now() < today_at("13:00") %}
+            0
+          {% else %}
+            {{ [export_dzien - export_rano, 0] | max | round(3) }}
+          {% endif %}
+        availability: >
+          {{
+            states('sensor.solarman_daily_energy_sold') not in ['unknown', 'unavailable', 'none']
+            and states('var.export_rano_zamkniety') not in ['unknown', 'unavailable', 'none']
+          }}
+
+      - name: "Aktualny limit PV"
+        unique_id: aktualny_limit_pv
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >
+          {% set pv_dzis = states('sensor.solarman_microinverter_energy_today') | float(0) %}
+          {% set export_dzien = states('sensor.solarman_daily_energy_sold') | float(0) %}
+          {% set export_rano_przen = states('sensor.export_rano_pokryty_przeniesieniem') | float(0) %}
+          {% set eksport_przypisany_pv = export_dzien - export_rano_przen %}
+          {{ [pv_dzis - eksport_przypisany_pv, 0] | max | round(3) }}
+        availability: >
+          {{
+            states('sensor.solarman_microinverter_energy_today') not in ['unknown', 'unavailable', 'none']
+            and states('sensor.solarman_daily_energy_sold') not in ['unknown', 'unavailable', 'none']
+            and states('sensor.export_rano_pokryty_przeniesieniem') not in ['unknown', 'unavailable', 'none']
+          }}
+        attributes:
+          pv_dzis_kwh: >
+            {{ states('sensor.solarman_microinverter_energy_today') | float(0) | round(3) }}
+          eksport_dzien_kwh: >
+            {{ states('sensor.solarman_daily_energy_sold') | float(0) | round(3) }}
+          export_rano_pokryty_przeniesieniem_kwh: >
+            {{ states('sensor.export_rano_pokryty_przeniesieniem') | float(0) | round(3) }}
+          eksport_przypisany_pv_kwh: >
+            {% set export_dzien = states('sensor.solarman_daily_energy_sold') | float(0) %}
+            {% set export_rano_przen = states('sensor.export_rano_pokryty_przeniesieniem') | float(0) %}
+            {{ (export_dzien - export_rano_przen) | round(3) }}
+
+      - name: "Aktualny limit magazyn"
+        unique_id: aktualny_limit_magazyn
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >
+          {% set pojemnosc = states('var.magazyn_pojemnosc_brutto_kwh') | float(0) %}
+          {% set export_po_13 = states('sensor.export_po_13') | float(0) %}
+          {% set pv_zaniklo = is_state('binary_sensor.pv_zaniklo_dla_logiki_eksportu', 'on') %}
+
+          {% if now() < today_at("13:00") %}
+            {{ [states('var.przeniesionaenergia') | float(0), 0] | max | round(3) }}
+          {% elif not pv_zaniklo %}
+            {{ [pojemnosc, 0] | max | round(3) }}
+          {% else %}
+            {{ [pojemnosc - export_po_13, 0] | max | round(3) }}
+          {% endif %}
+        availability: >
+          {{
+            states('var.przeniesionaenergia') not in ['unknown', 'unavailable', 'none']
+            and states('var.magazyn_pojemnosc_brutto_kwh') not in ['unknown', 'unavailable', 'none']
+            and states('sensor.export_po_13') not in ['unknown', 'unavailable', 'none']
+          }}
+        attributes:
+          tryb: >
+            {% set pv_zaniklo = is_state('binary_sensor.pv_zaniklo_dla_logiki_eksportu', 'on') %}
+            {% if now() < today_at("13:00") %}
+              rano_przeniesienie
+            {% elif not pv_zaniklo %}
+              pelny_limit_brutto_magazynu
+            {% else %}
+              limit_brutto_minus_export_po_13
+            {% endif %}
+          przeniesionaenergia_biezaca: >
+            {{ states('var.przeniesionaenergia') | float(0) | round(3) }}
+          pojemnosc_brutto_magazynu: >
+            {{ states('var.magazyn_pojemnosc_brutto_kwh') | float(0) | round(3) }}
+          export_po_13_kwh: >
+            {{ states('sensor.export_po_13') | float(0) | round(3) }}
+
+      - name: "Aktualny limit dzienny"
+        unique_id: aktualny_limit_dzienny
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >
+          {% set limit_pv = states('sensor.aktualny_limit_pv') | float(0) %}
+          {% set limit_mag = states('sensor.aktualny_limit_magazyn') | float(0) %}
+          {% set pv_zaniklo = is_state('binary_sensor.pv_zaniklo_dla_logiki_eksportu', 'on') %}
+
+          {% if now() < today_at("13:00") %}
+            {{ (limit_pv + limit_mag) | round(3) }}
+          {% elif not pv_zaniklo %}
+            {{ limit_pv | round(3) }}
+          {% else %}
+            {{ [limit_pv, limit_mag] | min | round(3) }}
+          {% endif %}
+        availability: >
+          {{
+            states('sensor.aktualny_limit_pv') not in ['unknown', 'unavailable', 'none']
+            and states('sensor.aktualny_limit_magazyn') not in ['unknown', 'unavailable', 'none']
+          }}
+        attributes:
+          faza_dnia: >
+            {% set pv_zaniklo = is_state('binary_sensor.pv_zaniklo_dla_logiki_eksportu', 'on') %}
+            {% if now() < today_at("13:00") %}
+              rano
+            {% elif not pv_zaniklo %}
+              po_13_z_produkcja_pv
+            {% else %}
+              po_zaniku_pv
+            {% endif %}
+          limit_pv_kwh: >
+            {{ states('sensor.aktualny_limit_pv') | float(0) | round(3) }}
+          limit_magazyn_kwh: >
+            {{ states('sensor.aktualny_limit_magazyn') | float(0) | round(3) }}
+          pv_ponizej_30w_przez_15_minut: >
+            {{ is_state('binary_sensor.pv_ponizej_30w_przez_15_minut', 'on') }}
+          pv_zaniklo_dla_logiki_eksportu: >
+            {{ is_state('binary_sensor.pv_zaniklo_dla_logiki_eksportu', 'on') }}
+
+automation:
+  - id: bilans_exportu_kopiuj_przeniesionaenergia_start_dnia
+    alias: "Bilans eksportu: kopiuj przeniesionaenergia na start dnia"
+    mode: single
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    action:
+      - service: var.set
+        data:
+          entity_id: var.przeniesionaenergia_start_dnia
+          value: >
+            {{ states('var.przeniesionaenergia') | float(0) | round(3) }}
+
+  - id: bilans_exportu_reset_snapshotu_rano
+    alias: "Bilans eksportu: reset snapshotu rano"
+    mode: single
+    trigger:
+      - platform: time
+        at: "00:00:05"
+    action:
+      - service: var.set
+        data:
+          entity_id: var.export_rano_zamkniety
+          value: 0
+
+  - id: bilans_exportu_snapshot_o_13
+    alias: "Bilans eksportu: snapshot eksportu rano o 13:00"
+    mode: single
+    trigger:
+      - platform: time
+        at: "13:00:00"
+    action:
+      - service: var.set
+        data:
+          entity_id: var.export_rano_zamkniety
+          value: >
+            {{ states('sensor.solarman_daily_energy_sold') | float(0) | round(3) }}
+
+  - id: bilans_exportu_wyzeruj_przeniesionaenergie_o_13
+    alias: "Bilans eksportu: wyzeruj przeniesionaenergie o 13:00"
+    mode: single
+    trigger:
+      - platform: time
+        at: "13:00:01"
+    action:
+      - service: var.set
+        data:
+          entity_id: var.przeniesionaenergia
+          value: 0
+
+  - id: bilans_exportu_wylicz_przeniesionaenergie_na_kolejny_dzien
+    alias: "Bilans eksportu: wylicz przeniesionaenergie o 23:59"
+    mode: single
+    trigger:
+      - platform: time
+        at: "23:59:00"
+    variables:
+      limit_pv: "{{ states('sensor.aktualny_limit_pv') | float(0) }}"
+      limit_mag: "{{ states('sensor.aktualny_limit_magazyn') | float(0) }}"
+      nowa_przeniesionaenergia: >
+        {% set v = [limit_pv, limit_mag] | min %}
+        {{ [v, 0] | max | round(3) }}
+    action:
+      - service: var.set
+        data:
+          entity_id: var.przeniesionaenergia
+          value: "{{ nowa_przeniesionaenergia }}"

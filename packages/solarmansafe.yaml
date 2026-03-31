@@ -1,0 +1,220 @@
+template:
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_total_energy_bought
+    sensor:
+      - name: "Solarman Total Energy Bought Safe"
+        unique_id: solarman_total_energy_bought_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >
+          {% set raw_s = states('sensor.solarman_total_energy_bought') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {{ [raw, prev] | max | round(3) }}
+            {% endif %}
+          {% endif %}
+        availability: true
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_total_energy_sold
+    sensor:
+      - name: "Solarman Total Energy Sold Safe"
+        unique_id: solarman_total_energy_sold_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >
+          {% set raw_s = states('sensor.solarman_total_energy_sold') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {{ [raw, prev] | max | round(3) }}
+            {% endif %}
+          {% endif %}
+        availability: true
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_total_battery_discharge
+    sensor:
+      - name: "Solarman Total Battery Discharge Safe"
+        unique_id: solarman_total_battery_discharge_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >
+          {% set raw_s = states('sensor.solarman_total_battery_discharge') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {{ [raw, prev] | max | round(3) }}
+            {% endif %}
+          {% endif %}
+        availability: true
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_total_battery_charge
+    sensor:
+      - name: "Solarman Total Battery Charge Safe"
+        unique_id: solarman_total_battery_charge_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >
+          {% set raw_s = states('sensor.solarman_total_battery_charge') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {{ [raw, prev] | max | round(3) }}
+            {% endif %}
+          {% endif %}
+        availability: true
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_battery
+    sensor:
+      - name: "Solarman Battery Safe"
+        unique_id: solarman_battery_safe
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        state: >
+          {% set raw_s = states('sensor.solarman_battery') %}
+          {% set prev_s = this.state %}
+          {% set max_delta = 5 %}
+          {% set zero_floor = 1 %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(0) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {% if raw <= zero_floor and prev > 5 %}
+                {{ prev | round(0) }}
+              {% elif raw < 0 or raw > 100 %}
+                {{ prev | round(0) }}
+              {% elif (prev - raw) > max_delta %}
+                {{ prev | round(0) }}
+              {% elif (raw - prev) > max_delta %}
+                {{ prev | round(0) }}
+              {% else %}
+                {{ raw | round(0) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        availability: true
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_microinverter_energy_today
+
+    sensor:
+      - name: "Solarman Microinverter Energy Today Safe"
+        unique_id: solarman_microinverter_energy_today_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total
+
+        state: >
+          {% set raw_s = states('sensor.solarman_microinverter_energy_today') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {% set minutes = now().hour * 60 + now().minute %}
+              {% set reset_window = (minutes >= 1430) or (minutes <= 10) %}
+
+              {% if raw < prev and reset_window and raw <= 0.2 %}
+                {{ raw | round(3) }}
+              {% elif raw < prev %}
+                {{ prev | round(3) }}
+              {% else %}
+                {{ raw | round(3) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+        availability: true
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_daily_energy_sold
+
+    sensor:
+      - name: "Solarman Daily Energy Sold Safe"
+        unique_id: solarman_daily_energy_sold_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total
+
+        state: >
+          {% set raw_s = states('sensor.solarman_daily_energy_sold') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {% set minutes = now().hour * 60 + now().minute %}
+              {% set reset_window = (minutes >= 1430) or (minutes <= 10) %}
+
+              {% if raw < prev and reset_window and raw <= 0.2 %}
+                {{ raw | round(3) }}
+              {% elif raw < prev %}
+                {{ prev | round(3) }}
+              {% else %}
+                {{ raw | round(3) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+        availability: true
