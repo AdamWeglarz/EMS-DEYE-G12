@@ -939,6 +939,7 @@ automation:
           {% set pojemnosc_kwh = 15.0 %}
           {% set prog_min_kwh = 3.0 %}
           {% set zapas_kwh = 0.75 %}
+          {% set soc_min_rano = states('var.magazyn_soc_min_rano_percent') | float(25) %}
           {% set dzis = now().date() %}
           {% set current_hour = now().hour %}
           {% set current_minute = now().minute %}
@@ -982,6 +983,7 @@ automation:
             S_pre=0.0,
             S_post=0.0,
             Smin_post=0.0,
+            Smin_post_do_11=0.0,
             Smax_post=0.0,
             h_min=6,
             spill=0.0,
@@ -1024,6 +1026,10 @@ automation:
                 {% set ns.h_min = h %}
               {% endif %}
 
+              {% if h <= 10 and ns.S_post < ns.Smin_post_do_11 %}
+                {% set ns.Smin_post_do_11 = ns.S_post %}
+              {% endif %}
+
               {% if ns.S_post > ns.Smax_post %}
                 {% set ns.Smax_post = ns.S_post %}
               {% endif %}
@@ -1064,6 +1070,13 @@ automation:
           {% if E6_req_floor < 0 %}{% set E6_req_floor = 0 %}{% endif %}
           {% if E6_req_floor > max_ene_u %}{% set E6_req_floor = max_ene_u %}{% endif %}
 
+          {# ===== Warunek min SOC rano (do 11:00) ===== #}
+          {% set rano_min_u = ((soc_min_rano / 100) * pojemnosc_kwh - prog_min_kwh) %}
+          {% if rano_min_u < 0 %}{% set rano_min_u = 0 %}{% endif %}
+          {% set E6_req_floor_rano = rano_min_u - ns.Smin_post_do_11 %}
+          {% if E6_req_floor_rano < 0 %}{% set E6_req_floor_rano = 0 %}{% endif %}
+          {% if E6_req_floor_rano > max_ene_u %}{% set E6_req_floor_rano = max_ene_u %}{% endif %}
+
           {# ===== Warunek celu na 13:00 ===== #}
           {% set S_end_post = ns.S_post %}
           {% set E6_req_target = target_u_13 - S_end_post %}
@@ -1076,7 +1089,7 @@ automation:
           {% if E6_safe_max > max_ene_u %}{% set E6_safe_max = max_ene_u %}{% endif %}
 
           {# ===== Bazowy plan poranny ===== #}
-          {% set E6_plan_required = [E6_req_floor, E6_req_target] | max %}
+          {% set E6_plan_required = [E6_req_floor, E6_req_floor_rano, E6_req_target] | max %}
           {% set E6_plan = [E6_plan_required, E6_safe_max] | min %}
           {% if E6_plan < 0 %}{% set E6_plan = 0 %}{% endif %}
           {% if E6_plan > max_ene_u %}{% set E6_plan = max_ene_u %}{% endif %}

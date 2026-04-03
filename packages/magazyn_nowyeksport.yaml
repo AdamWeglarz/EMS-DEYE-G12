@@ -110,6 +110,7 @@ automation:
           soc_floor_pct: "{{ states('var.magazyn_soc_floor_percent') | float(20) }}"
           soc_comfort_pct: "{{ states('var.magazyn_soc_comfort_percent') | float(25) }}"
           spill_bat_soc_min_pct: 30
+          soc_min_rano_pct: "{{ states('var.magazyn_soc_min_rano_percent') | float(25) }}"
           semi_soc_target_13_pct: 50
           soc_buffer_mid_pct: 5
           max_moc_rozladowania_kw: "{{ states('var.magazyn_max_moc_rozladowania_kw') | float(6) }}"
@@ -246,9 +247,10 @@ automation:
 
             {% set semi_soc_floor_pct = [semi_soc_target_13_pct, soc_min_dynamic_13] | max %}
 
-            {% set spill_floor_kwh = (pojemnosc_kwh * spill_bat_soc_min_pct / 100) %}
-            {% set semi_floor_kwh = (pojemnosc_kwh * semi_soc_floor_pct / 100) %}
-            {% set full_floor_kwh = (pojemnosc_kwh * soc_min_dynamic_13 / 100) %}
+            {% set rano_floor_kwh = (pojemnosc_kwh * soc_min_rano_pct / 100) %}
+            {% set spill_floor_kwh = [pojemnosc_kwh * spill_bat_soc_min_pct / 100, rano_floor_kwh] | max %}
+            {% set semi_floor_kwh = [pojemnosc_kwh * semi_soc_floor_pct / 100, rano_floor_kwh] | max %}
+            {% set full_floor_kwh = [pojemnosc_kwh * soc_min_dynamic_13 / 100, rano_floor_kwh] | max %}
 
             {% set battery_budget_spill = energy_now_kwh - spill_floor_kwh %}
             {% if battery_budget_spill < 0 %}{% set battery_budget_spill = 0 %}{% endif %}
@@ -521,7 +523,9 @@ automation:
 
             {% set pv_can_export_now = (cena_aktualna_kwh >= spill_pv_min_price) %}
             {% set battery_can_export_now = false %}
-            {% if current_mode in ['pv_bat_full', 'bat_full'] %}
+            {% if soc_current <= soc_min_rano_pct %}
+              {% set battery_can_export_now = false %}
+            {% elif current_mode in ['pv_bat_full', 'bat_full'] %}
               {% if cena_aktualna_kwh >= full_bat_min_price and soc_current > soc_min_dynamic_13 %}
                 {% set battery_can_export_now = true %}
               {% endif %}
@@ -1770,13 +1774,14 @@ automation:
           pojemnosc_kwh: "{{ states('var.magazyn_pojemnosc_brutto_kwh') | float(15) }}"
           soc_floor_pct: "{{ states('var.magazyn_soc_floor_percent') | float(20) }}"
           soc_comfort_pct: "{{ states('var.magazyn_soc_comfort_percent') | float(25) }}"
+          soc_min_rano_pct: "{{ states('var.magazyn_soc_min_rano_percent') | float(25) }}"
           soc_buffer_mid_pct: 5
           max_moc_rozladowania_kw: "{{ states('var.magazyn_max_moc_rozladowania_kw') | float(6) }}"
-  
+
           cons_mult: "{{ states('var.magazyn_konsumpcja_multiplier') | float(1.15) }}"
           cons_default: "{{ states('var.magazyn_konsumpcja_default_kwh_h') | float(1.5) }}"
           lookback_sec: "{{ (states('var.magazyn_sql_lookback_days_ladowanie') | int(7)) * 86400 }}"
-  
+
           ceny_jutro: "{{ state_attr('sensor.rce_prices_tomorrow_scaled', 'value') or [] }}"
   
       - service: sql.query
@@ -2042,6 +2047,7 @@ automation:
   
             {% set booked_soc = ((booked_energy + floor_kwh) / pojemnosc_kwh * 100) | round(0) | int %}
             {% if booked_soc < (soc_floor_pct | int(20)) %}{% set booked_soc = soc_floor_pct | int(20) %}{% endif %}
+            {% if booked_soc < (soc_min_rano_pct | int(25)) %}{% set booked_soc = soc_min_rano_pct | int(25) %}{% endif %}
             {% if booked_soc > 100 %}{% set booked_soc = 100 %}{% endif %}
   
             {# automat blokady: nie ustawiaj powyżej aktualnego SOC #}
