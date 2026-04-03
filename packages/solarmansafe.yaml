@@ -168,7 +168,7 @@ template:
               {% set minutes = now().hour * 60 + now().minute %}
               {% set reset_window = (minutes >= 1430) or (minutes <= 10) %}
 
-              {% if raw < prev and reset_window and raw <= 0.2 %}
+              {% if raw < prev and reset_window and raw < prev * 0.5 %}
                 {{ raw | round(3) }}
               {% elif raw < prev %}
                 {{ prev | round(3) }}
@@ -207,7 +207,7 @@ template:
               {% set minutes = now().hour * 60 + now().minute %}
               {% set reset_window = (minutes >= 1430) or (minutes <= 10) %}
 
-              {% if raw < prev and reset_window and raw <= 0.2 %}
+              {% if raw < prev and reset_window and raw < prev * 0.5 %}
                 {{ raw | round(3) }}
               {% elif raw < prev %}
                 {{ prev | round(3) }}
@@ -246,7 +246,7 @@ template:
               {% set minutes = now().hour * 60 + now().minute %}
               {% set reset_window = (minutes >= 1430) or (minutes <= 10) %}
 
-              {% if raw < prev and reset_window and raw <= 0.2 %}
+              {% if raw < prev and reset_window and raw < prev * 0.5 %}
                 {{ raw | round(3) }}
               {% elif raw < prev %}
                 {{ prev | round(3) }}
