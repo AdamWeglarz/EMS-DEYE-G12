@@ -182,6 +182,45 @@ template:
 
   - trigger:
       - platform: state
+        entity_id: sensor.solarman_daily_energy_bought
+
+    sensor:
+      - name: "Solarman Daily Energy Bought Safe"
+        unique_id: solarman_daily_energy_bought_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total
+
+        state: >
+          {% set raw_s = states('sensor.solarman_daily_energy_bought') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {% set minutes = now().hour * 60 + now().minute %}
+              {% set reset_window = (minutes >= 1430) or (minutes <= 10) %}
+
+              {% if raw < prev and reset_window and raw <= 0.2 %}
+                {{ raw | round(3) }}
+              {% elif raw < prev %}
+                {{ prev | round(3) }}
+              {% else %}
+                {{ raw | round(3) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+        availability: true
+
+  - trigger:
+      - platform: state
         entity_id: sensor.solarman_daily_energy_sold
 
     sensor:
