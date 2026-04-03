@@ -19,6 +19,7 @@
 # - BAT spill działa tylko do fizycznego spillu i z ochroną 30% SOC
 # - BAT semi działa bez limitu spillu, ale z celem minimum 50% o 13:00
 # - BAT full działa bez limitu spillu i tylko do technicznego minimum min_soc_dynamic_13
+# - dodatkowy floor: var.magazyn_soc_min_rano_percent — żaden tryb BAT nie zejdzie poniżej tego SOC
 # - dodatkowy raport godzinowy 06:00–13:00
 ###############################################################################
 
@@ -35,6 +36,7 @@ automation:
       - BAT spill od koszt_tansza, tylko do realnego spillu i z floor 30%
       - BAT semi od koszt_tansza + min_zysk_sprzedaz, bez limitu spillu, z celem min. 50% o 13:00
       - BAT full od koszt_drozsza + min_zysk_sprzedaz, bez limitu spillu, do min_soc_dynamic_13
+      - dodatkowy floor: var.magazyn_soc_min_rano_percent — blokuje eksport BAT poniżej tego SOC
 
     trigger:
       - platform: time
@@ -713,6 +715,7 @@ automation:
 
             🔋 SOC: {{ soc_current | round(1) }}%
             🛡️ Min SOC do 13:00: {{ min_soc_dynamic_13 }}%
+            🛡️ Min SOC rano (do 11:00): {{ soc_min_rano_pct }}%
             🛡️ Semi floor na 13:00: {{ semi_soc_floor_pct }}%
             🛡️ Spill BAT floor: {{ spill_bat_soc_min_pct_dbg }}%
             🔋 Budżet BAT spill: {{ battery_budget_spill | round(2) }} kWh
@@ -1743,6 +1746,7 @@ automation:
         * PARTIAL = koszt_tansza + min_zysk_sprzedaz
         * wybór slotów po cenie malejąco
         * automat pełni rolę blokady, nie planera ładowania
+        * booked_soc nie spadnie poniżej var.magazyn_soc_min_rano_percent (floor rano)
     mode: single
   
     trigger:
@@ -2162,6 +2166,7 @@ automation:
                     Booked SOC: {{ booked_soc }}%
   
                     Jutrzejszy min SOC do 13:00: {{ soc_min_dynamic_13_tomorrow }}%
+                    Min SOC rano (floor): {{ soc_min_rano_pct }}%
                     Jutrzejszy mid stop: {{ soc_mid_stop_tomorrow }}%
   
                     PV debug:
