@@ -52,6 +52,12 @@ var:
     initial_value: 21
     restore: true
 
+  magazyn_soc_min_rano_percent:
+    unique_id: "magazyn_soc_min_rano_percent"
+    friendly_name: "Magazyn: Min bezpieczne SOC rano (do 11:00) (%)"
+    icon: "mdi:battery-alert-variant"
+    initial_value: 25
+
   # 2) Zużycie / SQL / safety
   magazyn_konsumpcja_multiplier:
     unique_id: "magazyn_konsumpcja_multiplier"
