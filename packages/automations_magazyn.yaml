@@ -2179,3 +2179,28 @@ automation:
       data:
         value: 20
 
+- id: magazyn_soc_min_rano_pogoda
+  alias: "Magazyn: Ustaw min SOC rano wg pogody (5:29)"
+  description: >
+    Codziennie o 5:29 ustawia var.magazyn_soc_min_rano_percent
+    na podstawie prognozy weather.pirateweather:
+    sunny/clear-night → 25, partlycloudy → 30, reszta → 35.
+  mode: single
+  trigger:
+    - platform: time
+      at: "05:29:00"
+  condition: []
+  action:
+    - service: var.set
+      data:
+        entity_id: var.magazyn_soc_min_rano_percent
+        value: >-
+          {% set condition = states('weather.pirateweather') %}
+          {% if condition in ['sunny', 'clear-night'] %}
+            25
+          {% elif condition == 'partlycloudy' %}
+            30
+          {% else %}
+            35
+          {% endif %}
+
