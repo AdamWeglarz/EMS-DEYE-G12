@@ -139,11 +139,39 @@ automation:
             ORDER BY h;
         response_variable: statystyki_konsumpcji
 
+      - service: calendar.get_events
+        target:
+          entity_id: calendar.urlop
+        data:
+          start_date_time: "{{ now().strftime('%Y-%m-%d 00:00:00') }}"
+          end_date_time: "{{ now().strftime('%Y-%m-%d 23:59:59') }}"
+        response_variable: urlop_events
+
       - variables:
           pack: >-
             {% set slot_start_min = (m_now // 15) * 15 %}
             {% set slot_start_total = (h_now * 60 + slot_start_min) %}
             {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedHourly') or [] %}
+            {% set dzis = now().date() %}
+            {% set plan_date = dzis %}
+
+            {# ===== URLOP: lista godzin dla dzisiejszego planu ===== #}
+            {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
+            {% set urlop_ns = namespace(hours=[]) %}
+            {% for ev in urlop_list %}
+              {% set es = as_datetime(ev.start) | as_local %}
+              {% set ee = as_datetime(ev.end) | as_local %}
+              {% for off in range(0, 24) %}
+                {% set probe = now().replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+                {% if probe >= es and probe < ee %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% if hk not in urlop_ns.hours %}
+                    {% set urlop_ns.hours = urlop_ns.hours + [hk] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {% set urlop_hours = urlop_ns.hours %}
 
             {% set nsS = namespace(period='', price_mwh=0.0) %}
             {% for c in ceny_data %}
@@ -208,7 +236,9 @@ automation:
             {% set ns_pv_sum = namespace(total=0.0) %}
             {% set ns_spill = namespace(total=0.0, e_u=E0_u, lines='') %}
             {% for h in range(h_now, 14) %}
-              {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
               {% set pv_h = pv_d.get(h, 0) %}
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set z_eff = z_h * factor %}
@@ -282,7 +312,9 @@ automation:
                       {% set price_kwh = price_mwh / 1000 %}
                       {% if price_kwh >= full_bat_min_price %}
                         {% set pv_h = pv_d.get(h, 0) %}
-                        {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+                        {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsFullCand.list = nsFullCand.list + [{
@@ -351,7 +383,9 @@ automation:
                       {% set price_kwh = price_mwh / 1000 %}
                       {% if price_kwh >= semi_bat_min_price and price_kwh < full_bat_min_price %}
                         {% set pv_h = pv_d.get(h, 0) %}
-                        {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+                        {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsSemiCand.list = nsSemiCand.list + [{
@@ -420,7 +454,9 @@ automation:
                       {% set price_kwh = price_mwh / 1000 %}
                       {% if price_kwh >= spill_pv_min_price and price_kwh < semi_bat_min_price %}
                         {% set pv_h = pv_d.get(h, 0) %}
-                        {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+                        {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsSpillCand.list = nsSpillCand.list + [{
@@ -518,7 +554,9 @@ automation:
                   {% set nsCur.price_zone = 'none' %}
                 {% endif %}
                 {% set cur_h = now().hour %}
-                {% set nsCur.hour_cons = ((dict_z.get(cur_h, cons_default)) * cons_mult) %}
+                {% set cur_hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(cur_h) %}
+                {% set cur_is_urlop = cur_hk in urlop_hours %}
+                {% set nsCur.hour_cons = 0.5 if cur_is_urlop else ((dict_z.get(cur_h, cons_default)) * cons_mult) %}
                 {% set nsCur.hour_pv = (pv_d.get(cur_h, 0)) %}
               {% endif %}
             {% endfor %}
@@ -548,7 +586,9 @@ automation:
 
             {% set nsRpt = namespace(lines='', e_u=E0_u, s=0.0) %}
             {% for h in range(h_now, 14) %}
-              {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
               {% set pv_h = pv_d.get(h, 0) %}
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set z_eff = z_h * factor %}
@@ -1179,11 +1219,39 @@ automation:
             GROUP BY h
             ORDER BY h;
         response_variable: statystyki_wieczor
-  
+
+      - service: calendar.get_events
+        target:
+          entity_id: calendar.urlop
+        data:
+          start_date_time: "{{ now().strftime('%Y-%m-%d 00:00:00') }}"
+          end_date_time: "{{ now().strftime('%Y-%m-%d 23:59:59') }}"
+        response_variable: urlop_events
+
       - variables:
           pack: >-
             {% set slot_start_min = (m_now // 15) * 15 %}
             {% set slot_start_total = (h_now * 60 + slot_start_min) %}
+            {% set dzis = now().date() %}
+            {% set plan_date = dzis %}
+
+            {# ===== URLOP: lista godzin dla dzisiejszego planu ===== #}
+            {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
+            {% set urlop_ns = namespace(hours=[]) %}
+            {% for ev in urlop_list %}
+              {% set es = as_datetime(ev.start) | as_local %}
+              {% set ee = as_datetime(ev.end) | as_local %}
+              {% for off in range(0, 24) %}
+                {% set probe = now().replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+                {% if probe >= es and probe < ee %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% if hk not in urlop_ns.hours %}
+                    {% set urlop_ns.hours = urlop_ns.hours + [hk] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {% set urlop_hours = urlop_ns.hours %}
   
             {# --- aktualny slot i cena --- #}
             {% set nsS = namespace(period='', price_mwh=0.0) %}
@@ -1274,7 +1342,9 @@ automation:
   
             {% set ns_cons = namespace(total=0.0) %}
             {% for h in range(h_now, 22) %}
-              {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set ns_cons.total = ns_cons.total + (z_h * factor) %}
             {% endfor %}
@@ -1328,7 +1398,9 @@ automation:
                     {% set price_kwh = (c.rce_pln | float(0)) / 1000 %}
                     {% if h >= 15 and h < 22 and st >= slot_start_total and price_kwh >= prog_czesciowy %}
                       {% set pv_h = pv_d.get(h, 0) %}
-                      {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+                      {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
                       {% set base_delta_slot = (pv_h - z_h) / 4 %}
                       {% if price_kwh >= prog_pelny %}
                         {% set ns.full = ns.full + [{
@@ -1803,11 +1875,37 @@ automation:
             GROUP BY h
             ORDER BY h;
         response_variable: statystyki_rano
-  
+
+      - service: calendar.get_events
+        target:
+          entity_id: calendar.urlop
+        data:
+          start_date_time: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d 00:00:00') }}"
+          end_date_time: "{{ (now() + timedelta(days=1)).strftime('%Y-%m-%d 23:59:59') }}"
+        response_variable: urlop_events
+
       - variables:
           pack: >-
             {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_jutro', 'detailedHourly') or [] %}
-  
+
+            {# ===== URLOP: lista godzin (YYYY-MM-DD HH) dla JUTRZEJSZEGO planu ===== #}
+            {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
+            {% set urlop_ns = namespace(hours=[]) %}
+            {% for ev in urlop_list %}
+              {% set es = as_datetime(ev.start) | as_local %}
+              {% set ee = as_datetime(ev.end) | as_local %}
+              {% for off in range(0, 24) %}
+                {% set probe = (now() + timedelta(days=1)).replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+                {% if probe >= es and probe < ee %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% if hk not in urlop_ns.hours %}
+                    {% set urlop_ns.hours = urlop_ns.hours + [hk] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {% set urlop_hours = urlop_ns.hours %}
+
             {# --- zużycie dict --- #}
             {% set rows = statystyki_rano['result'] if (statystyki_rano is mapping and 'result' in statystyki_rano) else [] %}
             {% set nsC = namespace(d={}) %}
@@ -1818,6 +1916,7 @@ automation:
   
             {# --- PV dict jutro 06-13 --- #}
             {% set jutro = (now() + timedelta(days=1)).date() %}
+            {% set plan_date = jutro %}
             {% set nsP = namespace(d={}, count=0, debug='') %}
             {% set nsP.debug = "jutro:" ~ jutro ~ "|len:" ~ (forecast_data | length if forecast_data else 0) %}
   
@@ -1848,7 +1947,9 @@ automation:
             {# --- jutrzejsze min SOC do 13:00 --- #}
             {% set ns_cons = namespace(total=0.0) %}
             {% for h in range(6, 14) %}
-              {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
               {% set ns_cons.total = ns_cons.total + z_h %}
             {% endfor %}
             {% set total_cons_6_13 = ns_cons.total %}
@@ -1881,7 +1982,9 @@ automation:
   
             {% for h in range(6, 14) %}
               {% set pv_h = pv_d.get(h, 0) %}
-              {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
               {% set net_h = pv_h - z_h %}
               {% set batt_before = nsSpill.batt_kwh %}
               {% set batt_after_raw = batt_before + net_h %}
@@ -1915,7 +2018,9 @@ automation:
             {% set nsSurvive = namespace(total=0.0, lines='') %}
             {% for h in range(6, survive_to_hour) %}
               {% set pv_h = pv_d.get(h, 0) %}
-              {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
               {% set batt_h = z_h - pv_h %}
               {% if batt_h < 0 %}{% set batt_h = 0 %}{% endif %}
               {% set nsSurvive.total = nsSurvive.total + batt_h %}
@@ -1956,7 +2061,9 @@ automation:
   
                     {% if h >= 6 and h < 11 %}
                       {% set pv_h = pv_d.get(h, 0) %}
-                      {% set z_h = (dict_z.get(h, cons_default)) * cons_mult %}
+                      {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
                       {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                       {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
   
