@@ -999,6 +999,18 @@ automation:
           {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedHourly') or [] %}
           {% set ceny_data = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
 
+          {# ===== Koniec produkcji PV wg prognozy (spill do pv_end_excl, fallback 14) ===== #}
+          {% set nsE = namespace(last=13) %}
+          {% for item in forecast_data %}
+            {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
+            {% if ts.date() == dzis %}
+              {% set pv_it = (item.pv_estimate or item.pv_forecast or 0) | float %}
+              {% if pv_it > 0.1 and ts.hour > nsE.last %}{% set nsE.last = ts.hour %}{% endif %}
+            {% endif %}
+          {% endfor %}
+          {% set pv_end_excl = nsE.last + 1 %}
+          {% if pv_end_excl < 14 %}{% set pv_end_excl = 14 %}{% endif %}
+
           {# ===== SQL rows -> dict_z ===== #}
           {% set rows = statystyki_godzinowe['result'] if (statystyki_godzinowe is mapping and 'result' in statystyki_godzinowe) else [] %}
           {% set nsd = namespace(d={}) %}
@@ -1011,6 +1023,7 @@ automation:
           {% set ns = namespace(
             S_pre=0.0,
             S_post=0.0,
+            S_post_13=0.0,
             Smin_post=0.0,
             Smin_post_do_11=0.0,
             Smax_post=0.0,
@@ -1025,7 +1038,7 @@ automation:
           {% set ns.raport = ns.raport ~ "\nURLOP: " ~ ('TAK godz:' ~ (urlop_hours|join(',')) if urlop_any else 'NIE') %}
           {% set ns.raport = ns.raport ~ "\nAktualna godzina: " ~ current_hour ~ ":" ~ "%02d"|format(current_minute) %}
 
-          {% for h in range(3, 13) %}
+          {% for h in range(3, pv_end_excl) %}
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set z_h = 0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15 %}
@@ -1064,6 +1077,10 @@ automation:
 
               {% if ns.S_post > ns.Smax_post %}
                 {% set ns.Smax_post = ns.S_post %}
+              {% endif %}
+
+              {% if h == 12 %}
+                {% set ns.S_post_13 = ns.S_post %}
               {% endif %}
 
               {% set Eu_raw = E0_u + ns.S_post %}
@@ -1109,13 +1126,13 @@ automation:
           {% if E6_req_floor_rano < 0 %}{% set E6_req_floor_rano = 0 %}{% endif %}
           {% if E6_req_floor_rano > max_ene_u %}{% set E6_req_floor_rano = max_ene_u %}{% endif %}
 
-          {# ===== Warunek celu na 13:00 ===== #}
-          {% set S_end_post = ns.S_post %}
+          {# ===== Warunek celu na 13:00 (snapshot S_post po godzinie 12) ===== #}
+          {% set S_end_post = ns.S_post_13 %}
           {% set E6_req_target = target_u_13 - S_end_post %}
           {% if E6_req_target < 0 %}{% set E6_req_target = 0 %}{% endif %}
           {% if E6_req_target > max_ene_u %}{% set E6_req_target = max_ene_u %}{% endif %}
 
-          {# ===== Limit bez spillu przed 13:00 ===== #}
+          {# ===== Limit bez spillu w oknie produkcji PV ===== #}
           {% set E6_safe_max = max_ene_u - ns.Smax_post %}
           {% if E6_safe_max < 0 %}{% set E6_safe_max = 0 %}{% endif %}
           {% if E6_safe_max > max_ene_u %}{% set E6_safe_max = max_ene_u %}{% endif %}

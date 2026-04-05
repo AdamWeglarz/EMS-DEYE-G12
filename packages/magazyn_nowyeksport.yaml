@@ -210,7 +210,7 @@ automation:
               {% for item in forecast_data %}
                 {% if item is mapping and item.period_start is defined %}
                   {% set ts = item.period_start %}
-                  {% if ts.date() == dzis_local and ts.hour >= 6 and ts.hour <= 13 %}
+                  {% if ts.date() == dzis_local and ts.hour >= 6 and ts.hour <= 21 %}
                     {% set pv_value = item.pv_estimate | float(0) %}
                     {% set nsP.d = nsP.d | combine({ ts.hour: pv_value }) %}
                   {% endif %}
@@ -218,6 +218,14 @@ automation:
               {% endfor %}
             {% endif %}
             {% set pv_d = nsP.d %}
+
+            {# --- koniec produkcji PV wg prognozy (spill liczony do pv_end_excl, fallback 14) --- #}
+            {% set nsE = namespace(last=13) %}
+            {% for h in range(0, 24) %}
+              {% if pv_d.get(h, 0) > 0.1 %}{% set nsE.last = h %}{% endif %}
+            {% endfor %}
+            {% set pv_end_excl = nsE.last + 1 %}
+            {% if pv_end_excl < 14 %}{% set pv_end_excl = 14 %}{% endif %}
 
             {% set floor_kwh = (pojemnosc_kwh * soc_floor_pct / 100) %}
             {% set max_u = pojemnosc_kwh - floor_kwh %}
@@ -234,7 +242,6 @@ automation:
 
             {% set ns_cons = namespace(total=0.0) %}
             {% set ns_pv_sum = namespace(total=0.0) %}
-            {% set ns_spill = namespace(total=0.0, e_u=E0_u, lines='') %}
             {% for h in range(h_now, 14) %}
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
@@ -243,9 +250,21 @@ automation:
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set z_eff = z_h * factor %}
               {% set pv_eff = pv_h * factor %}
-              {% set d = pv_eff - z_eff %}
               {% set ns_cons.total = ns_cons.total + z_eff %}
               {% set ns_pv_sum.total = ns_pv_sum.total + pv_eff %}
+            {% endfor %}
+
+            {# --- spill liczony do końca produkcji PV --- #}
+            {% set ns_spill = namespace(total=0.0, e_u=E0_u, lines='') %}
+            {% for h in range(h_now, pv_end_excl) %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
+              {% set pv_h = pv_d.get(h, 0) %}
+              {% set factor = current_hour_factor if h == h_now else 1 %}
+              {% set z_eff = z_h * factor %}
+              {% set pv_eff = pv_h * factor %}
+              {% set d = pv_eff - z_eff %}
 
               {% set e_raw = ns_spill.e_u + d %}
               {% if e_raw > max_u %}
@@ -585,7 +604,7 @@ automation:
             {% set top_lines = nsFull.lines ~ nsSemi.lines ~ nsSpillPlan.lines %}
 
             {% set nsRpt = namespace(lines='', e_u=E0_u, s=0.0) %}
-            {% for h in range(h_now, 14) %}
+            {% for h in range(h_now, pv_end_excl) %}
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult %}
@@ -1924,7 +1943,7 @@ automation:
               {% for item in forecast_data %}
                 {% if item is mapping %}
                   {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
-                  {% if ts.date() == jutro and ts.hour >= 6 and ts.hour <= 13 %}
+                  {% if ts.date() == jutro and ts.hour >= 6 and ts.hour <= 21 %}
                     {% set pv_value = (item.pv_estimate or item.pv_forecast or 0) | float(0) %}
                     {% set nsP.d = nsP.d | combine({ ts.hour: pv_value }) %}
                     {% set nsP.count = nsP.count + 1 %}
@@ -1937,6 +1956,14 @@ automation:
   
             {% set pv_d = nsP.d %}
             {% set pv_debug = "parsed:" ~ nsP.count ~ "|" ~ nsP.debug ~ "|pv_d:" ~ pv_d %}
+
+            {# --- koniec produkcji PV wg prognozy (spill liczony do pv_end_excl, fallback 14) --- #}
+            {% set nsE = namespace(last=13) %}
+            {% for h in range(0, 24) %}
+              {% if pv_d.get(h, 0) > 0.1 %}{% set nsE.last = h %}{% endif %}
+            {% endfor %}
+            {% set pv_end_excl = nsE.last + 1 %}
+            {% if pv_end_excl < 14 %}{% set pv_end_excl = 14 %}{% endif %}
   
             {# --- rezerwa komfortowa --- #}
             {% set floor_kwh = (pojemnosc_kwh * soc_floor_pct / 100) %}
@@ -1980,7 +2007,7 @@ automation:
               batt_kwh=((soc_teraz / 100) * pojemnosc_kwh)
             ) %}
   
-            {% for h in range(6, 14) %}
+            {% for h in range(6, pv_end_excl) %}
               {% set pv_h = pv_d.get(h, 0) %}
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
