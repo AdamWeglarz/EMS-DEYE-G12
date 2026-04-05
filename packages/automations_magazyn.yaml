@@ -942,6 +942,7 @@ automation:
           {% set prog_min_kwh = 3.0 %}
           {% set zapas_kwh = 0.75 %}
           {% set soc_min_rano = states('var.magazyn_soc_min_rano_percent') | float(25) %}
+          {% set urlop = is_state('calendar.urlop', 'on') %}
           {% set dzis = now().date() %}
           {% set current_hour = now().hour %}
           {% set current_minute = now().minute %}
@@ -995,10 +996,11 @@ automation:
           {% set ns.raport = "G:START | E_u:" ~ E0_u|round(2) ~ "kWh | SOC:" ~ soc_akt|round(1) ~ "% | CEL13:" ~ target_soc_13|round(0) ~ "% | TZ:" ~ now().strftime('%z') %}
           {% set ns.raport = ns.raport ~ "\nPV_today_kWh:" ~ pv_today_kwh|round(2) %}
           {% set ns.raport = ns.raport ~ "\nSQL rows:" ~ (rows|length) ~ " | dict_z:" ~ dict_z %}
+          {% set ns.raport = ns.raport ~ "\nURLOP: " ~ ('TAK (zużycie=0.5kWh/h)' if urlop else 'NIE') %}
           {% set ns.raport = ns.raport ~ "\nAktualna godzina: " ~ current_hour ~ ":" ~ "%02d"|format(current_minute) %}
 
           {% for h in range(3, 13) %}
-            {% set z_h = (dict_z[h|string] | default(1.5)) * 1.15 %}
+            {% set z_h = 0.5 if urlop else (dict_z[h|string] | default(1.5)) * 1.15 %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}
@@ -1117,10 +1119,22 @@ automation:
 
           {# ===== LOWPV ===== #}
           {% set force_full = (pv_today_kwh > 0 and pv_today_kwh < 8.0) %}
-          {% if force_full %}
+          {% if force_full and not urlop %}
             {% set cel = 100 %}
             {% set czy_ladowac = true %}
             {% set powod = 'LOWPV' %}
+          {% endif %}
+
+          {# ===== URLOP: +1 kWh ponad wyliczenie, bez full ===== #}
+          {% if urlop %}
+            {% set grid_add_u = grid_add_u + 1.0 %}
+            {% set grid_add_u = [grid_add_u, (max_ene_u - E6_base)] | min %}
+            {% set E_start_u_new = E6_base + grid_add_u %}
+            {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+            {% if cel < 25 %}{% set cel = 25 %}{% endif %}
+            {% if cel > 100 %}{% set cel = 100 %}{% endif %}
+            {% set czy_ladowac = (grid_add_u | round(2)) >= 0.01 %}
+            {% set powod = powod ~ '+URLOP' %}
           {% endif %}
 
           {# ===== ETAP 2: extra doładowanie pod poranny eksport ===== #}
@@ -1500,6 +1514,7 @@ automation:
           {% set pojemnosc_kwh = 15.0 %}
           {% set prog_min_kwh = 3.0 %}
           {% set zapas_kwh = 0.75 %}
+          {% set urlop = is_state('calendar.urlop', 'on') %}
           {% set dzis = now().date() %}
           {% set current_hour = now().hour %}
           {% set current_minute = now().minute %}
@@ -1535,7 +1550,7 @@ automation:
           {# ===== Konsumpcja od TERAZ do 15:00 ===== #}
           {% set ns_pre15 = namespace(cons=0.0, txt="") %}
           {% for h in range(13, 15) %}
-            {% set z_h = (dict_z[h|string] | default(1.5)) * 1.15 %}
+            {% set z_h = 0.5 if urlop else (dict_z[h|string] | default(1.5)) * 1.15 %}
 
             {% if h < current_hour %}
               {% set frac = 0 %}
@@ -1577,12 +1592,13 @@ automation:
           {% set ns.raport = "G:START | E_u:" ~ E0_u|round(2) ~ "kWh | SOC:" ~ soc_akt|round(1) ~ "% | TZ:" ~ now().strftime('%z') %}
           {% set ns.raport = ns.raport ~ "\nPV korekta: k=" ~ k|round(3) ~ " | PV5m=" ~ pv_5m|round(0) ~ "W | PV30m_fc=" ~ pv_30m_fc|round(0) ~ "W | pozostało org=" ~ solcast_pozostalo_org|round(2) ~ "kWh | pozostało*=" ~ solcast_pozostalo|round(2) ~ "kWh" %}
           {% set ns.raport = ns.raport ~ "\nSQL rows:" ~ (rows|length) ~ " | dict_z:" ~ dict_z %}
+          {% set ns.raport = ns.raport ~ "\nURLOP: " ~ ('TAK (zużycie=0.5kWh/h)' if urlop else 'NIE') %}
           {% set ns.raport = ns.raport ~ "\nAktualna godzina: " ~ current_hour ~ ":" ~ "%02d"|format(current_minute) %}
           {% set ns.raport = ns.raport ~ "\nDo 15:00 | konsumpcja od teraz: " ~ cons_to_15_from_now|round(2) ~ "kWh | brak do 100%: " ~ batt_to_full_kwh|round(2) ~ "kWh | forecast skoryg. wystarczy?: " ~ ('TAK' if pv_wystarczy_na_full_i_pre15 else 'NIE') %}
           {% set ns.raport = ns.raport ~ ns_pre15.txt %}
 
           {% for h in range(13, 22) %}
-            {% set z_h = (dict_z[h|string] | default(1.5)) * 1.15 %}
+            {% set z_h = 0.5 if urlop else (dict_z[h|string] | default(1.5)) * 1.15 %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}
@@ -1709,10 +1725,23 @@ automation:
           {% set cel = cel_base %}
 
           {# ===== LOWPV SMART ===== #}
-          {% if pv_low and not blokada_spill %}
+          {% if pv_low and not blokada_spill and not urlop %}
             {% set cel = 100 %}
             {% set czy_ladowac = true %}
             {% set powod = 'LOWPV' %}
+          {% endif %}
+
+          {# ===== URLOP: +1 kWh ponad wyliczenie, bez full ===== #}
+          {% if urlop %}
+            {% set grid_add_u = grid_add_u + 1.0 %}
+            {% set grid_add_u = [grid_add_u, (max_ene_u - E15_base)] | min %}
+            {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
+            {% set E_start_u_new = E15_base + grid_add_u %}
+            {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+            {% if cel < 25 %}{% set cel = 25 %}{% endif %}
+            {% if cel > 100 %}{% set cel = 100 %}{% endif %}
+            {% set czy_ladowac = (grid_add_u | round(2)) >= 0.01 %}
+            {% set powod = powod ~ '+URLOP' %}
           {% endif %}
 
           {# ===== ETAP 2: doładowanie pod wieczorny eksport ===== #}
@@ -1752,7 +1781,7 @@ automation:
 
             {% set ns_cons15 = namespace(total=0.0) %}
             {% for h in range(15, 22) %}
-              {% set z_h = (dict_z[h|string] | default(cons_default)) * cons_mult %}
+              {% set z_h = 0.5 if urlop else (dict_z[h|string] | default(cons_default)) * cons_mult %}
               {% set ns_cons15.total = ns_cons15.total + z_h %}
             {% endfor %}
             {% set cons_15_22 = ns_cons15.total %}
