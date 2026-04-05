@@ -3,7 +3,7 @@
 # PLAN + EXEC v13.0
 #
 # LOGIKA:
-# - var.spill_poranny = fizyczny spill od teraz do 13:00
+# - var.spill_poranny = fizyczny spill od teraz do końca produkcji PV
 # - forecast pobierany bezpośrednio w pack
 # - parser PV oparty o item.period_start (datetime)
 # - bez as_datetime / as_local
@@ -30,7 +30,7 @@ automation:
     mode: single
     description: >
       Poranny eksport 06:00–11:00:
-      - var.spill_poranny = realny fizyczny spill liczony od teraz do 13:00
+      - var.spill_poranny = realny fizyczny spill liczony od teraz do końca produkcji PV
       - spill = tylko overflow ponad pojemność magazynu
       - PV spill od min_zysk_sprzedaz
       - BAT spill od koszt_tansza, tylko do realnego spillu i z floor 30%
@@ -646,7 +646,7 @@ automation:
               nsRpt.lines
             %}
 
-            {{ current_slot_period }}###{{ cena_aktualna|round(2) }}###{{ plan_list|join('|') }}###{{ in_plan_now }}###{{ (chosen_all|count) }}###{{ (plan_list|count) }}###{{ plan_sum|round(2) }}###{{ pozostalo|round(2) }}###{{ top_lines }}###{{ pv_hours_debug }}###{{ soc_min_dynamic_13 }}###{{ cena_aktualna_kwh|round(4) }}###{{ 'YES' if battery_can_export_now else 'NO' }}###{{ E0_u|round(2) }}###{{ E_min_partial|round(2) }}###{{ E_reserve_u|round(2) }}###{{ calkowite_zuzycie_kwh|round(2) }}###{{ calkowite_pv_kwh|round(2) }}###{{ energia_z_baterii|round(2) }}###{{ spill_pv_min_price|round(3) }}###{{ spill_bat_min_price|round(3) }}###{{ semi_bat_min_price|round(3) }}###{{ full_bat_min_price|round(3) }}###{{ current_mode }}###{{ 'YES' if pv_can_export_now else 'NO' }}###{{ plan_total_with_sold|round(2) }}###{{ battery_budget_spill|round(2) }}###{{ battery_budget_semi|round(2) }}###{{ battery_budget_full|round(2) }}###{{ battery_slot_cap_kwh|round(2) }}###{{ nsCur.pv_slot_energy|round(3) }}###{{ nsCur.bat_slot_energy|round(3) }}###{{ nsCur.plan_energy|round(3) }}###{{ nsCur.mode }}###{{ nsCur.price_zone }}###{{ nsCur.hour_cons|round(3) }}###{{ nsCur.hour_pv|round(3) }}###{{ semi_soc_floor_pct }}###{{ spill_bat_soc_min_pct }}###{{ raport_stat }}###{{ spill_real_lines }}
+            {{ current_slot_period }}###{{ cena_aktualna|round(2) }}###{{ plan_list|join('|') }}###{{ in_plan_now }}###{{ (chosen_all|count) }}###{{ (plan_list|count) }}###{{ plan_sum|round(2) }}###{{ pozostalo|round(2) }}###{{ top_lines }}###{{ pv_hours_debug }}###{{ soc_min_dynamic_13 }}###{{ cena_aktualna_kwh|round(4) }}###{{ 'YES' if battery_can_export_now else 'NO' }}###{{ E0_u|round(2) }}###{{ E_min_partial|round(2) }}###{{ E_reserve_u|round(2) }}###{{ calkowite_zuzycie_kwh|round(2) }}###{{ calkowite_pv_kwh|round(2) }}###{{ energia_z_baterii|round(2) }}###{{ spill_pv_min_price|round(3) }}###{{ spill_bat_min_price|round(3) }}###{{ semi_bat_min_price|round(3) }}###{{ full_bat_min_price|round(3) }}###{{ current_mode }}###{{ 'YES' if pv_can_export_now else 'NO' }}###{{ plan_total_with_sold|round(2) }}###{{ battery_budget_spill|round(2) }}###{{ battery_budget_semi|round(2) }}###{{ battery_budget_full|round(2) }}###{{ battery_slot_cap_kwh|round(2) }}###{{ nsCur.pv_slot_energy|round(3) }}###{{ nsCur.bat_slot_energy|round(3) }}###{{ nsCur.plan_energy|round(3) }}###{{ nsCur.mode }}###{{ nsCur.price_zone }}###{{ nsCur.hour_cons|round(3) }}###{{ nsCur.hour_pv|round(3) }}###{{ semi_soc_floor_pct }}###{{ spill_bat_soc_min_pct }}###{{ raport_stat }}###{{ spill_real_lines }}###{{ pv_end_excl }}
 
       - variables:
           current_slot_period: "{{ pack.split('###')[0] }}"
@@ -691,6 +691,7 @@ automation:
           spill_bat_soc_min_pct_dbg: "{{ pack.split('###')[38] | int(30) }}"
           raport_stat: "{{ pack.split('###')[39] }}"
           spill_real_lines: "{{ pack.split('###')[40] }}"
+          pv_end_excl: "{{ pack.split('###')[41] | int(14) }}"
 
       - service: var.set
         data:
@@ -763,7 +764,7 @@ automation:
         data:
           title: "📊 Plan porannego eksportu"
           message: >
-            🎯 Fizyczny spill od teraz do 13:00: {{ pozostalo | round(2) }} kWh
+            🎯 Fizyczny spill od teraz do końca produkcji ({{ '%02d:00' | format(pv_end_excl) }}): {{ pozostalo | round(2) }} kWh
 
             📈 Plan:
             - Slotów: {{ plan_count }}
@@ -977,7 +978,7 @@ automation:
                 data:
                   title: "📈 Podsumowanie porannego eksportu"
                   message: >
-                    🔄 Fizyczny spill od teraz do 13:00: {{ pozostalo | round(2) }} kWh
+                    🔄 Fizyczny spill od teraz do końca produkcji ({{ '%02d:00' | format(pv_end_excl) }}): {{ pozostalo | round(2) }} kWh
                     ✅ Sprzedano: {{ energy_sold | round(2) }} kWh
                     📦 Plan eksportu: {{ plan_sum | round(2) }} kWh
                     🔋 SOC końcowy: {{ soc_current | round(1) }}%

@@ -889,7 +889,7 @@ automation:
   description: >
     RANO: dobiera doładowanie z sieci tak, aby o 13:00 osiągnąć docelowy SOC
     z var.cel_naladowania_o_13, jednocześnie nie spaść po drodze poniżej 25%
-    i unikać spillu przed 13:00.
+    i unikać spillu w całym oknie produkcji PV.
     Dodatkowy floor: var.magazyn_soc_min_rano_percent — SOC nie spadnie poniżej
     tego progu w oknie 06:00–11:00.
     LOWPV: jeśli prognoza PV na dziś < 8 kWh -> ładuj FULL (100%).
@@ -1443,7 +1443,7 @@ automation:
           - E6_safe_max bez spillu: {{ wyniki_pakiet.split('###')[16] }} kWh
           - Czy target osiągalny bez spillu: {{ wyniki_pakiet.split('###')[17] }}
 
-          Obrona minimum w oknie 06-13:
+          Obrona minimum w oknie produkcji PV (06-end):
           - E6_required dla >=25%: {{ wyniki_pakiet.split('###')[3] }} kWh
           - Najgorsze saldo (Smin_post): {{ wyniki_pakiet.split('###')[4] }} kWh
           - Godzina minimum: {{ wyniki_pakiet.split('###')[5] }}:00
