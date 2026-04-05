@@ -1,0 +1,342 @@
+###############################################################################
+# FINANSE PV – śledzenie oszczędności / kosztów instalacji PV+magazyn
+#
+# Metodologia: Actual vs Counterfactual
+#   Oszczędność = Koszt_kontrafaktyczny − Koszt_rzeczywisty_netto
+#   Koszt_kontrafaktyczny   = Σ(Δkonsumpcja × cena_G12_lub_G11)
+#   Koszt_rzeczywisty_netto = Σ(Δimport × G12) − Σ(Δeksport × RCE_spot)
+#
+# Źródła:
+#   import/eksport: sensor.solarman_total_energy_bought/sold_safe (ciągłe)
+#   konsumpcja:     sensor.solarman_total_load_consumption (ciągłe)
+#   cena RCE:       state_attr('sensor.rce_prices_today_scaled','value') per slot
+#   G12:            var.magazyn_koszt_calkowity_strefa_drozsza/tansza_pln_kwh
+#   G11:            var.g11_cena_kwh = 0.96 PLN/kWh (flat)
+#   G12 tańsza:     13:00-15:00 i 22:00-06:00
+#   G12 droższa:    reszta
+#
+# Akumulacja: co 15 min, reset o 23:59:00
+###############################################################################
+
+var:
+
+  # ── Konfiguracja cen ────────────────────────────────────────────────────────
+
+  g11_cena_kwh:
+    unique_id: "g11_cena_kwh"
+    friendly_name: "Taryfa G11 – cena całkowita"
+    icon: "mdi:currency-usd"
+    initial_value: 0.96
+    restore: true
+
+  # ── Poprzednie wartości liczników (delta) ──────────────────────────────────
+
+  finanse_prev_bought_kwh:
+    unique_id: "finanse_prev_bought_kwh"
+    friendly_name: "Finanse: poprzedni odczyt energy bought"
+    icon: "mdi:transmission-tower-import"
+    initial_value: 0
+    restore: true
+
+  finanse_prev_sold_kwh:
+    unique_id: "finanse_prev_sold_kwh"
+    friendly_name: "Finanse: poprzedni odczyt energy sold"
+    icon: "mdi:transmission-tower-export"
+    initial_value: 0
+    restore: true
+
+  finanse_prev_cons_kwh:
+    unique_id: "finanse_prev_cons_kwh"
+    friendly_name: "Finanse: poprzedni odczyt konsumpcji"
+    icon: "mdi:home-lightning-bolt"
+    initial_value: 0
+    restore: true
+
+  finanse_prev_trigger_time:
+    unique_id: "finanse_prev_trigger_time"
+    friendly_name: "Finanse: czas poprzedniego triggera"
+    icon: "mdi:clock-outline"
+    initial_value: "2000-01-01 00:00:00"
+    restore: true
+
+  # ── Akumulatory dzienne (reset 23:59) ──────────────────────────────────────
+
+  finanse_import_koszt_dzis_pln:
+    unique_id: "finanse_import_koszt_dzis_pln"
+    friendly_name: "Finanse: koszt importu dziś"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_eksport_przychod_dzis_pln:
+    unique_id: "finanse_eksport_przychod_dzis_pln"
+    friendly_name: "Finanse: przychód eksportu dziś"
+    icon: "mdi:transmission-tower-export"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_kontrafakt_g12_dzis_pln:
+    unique_id: "finanse_kontrafakt_g12_dzis_pln"
+    friendly_name: "Finanse: koszt kontrafaktyczny G12 dziś"
+    icon: "mdi:cash-minus"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_kontrafakt_g11_dzis_pln:
+    unique_id: "finanse_kontrafakt_g11_dzis_pln"
+    friendly_name: "Finanse: koszt kontrafaktyczny G11 dziś"
+    icon: "mdi:cash-minus"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  # ── Poprzedni dzień (zapisywane przez reset) ───────────────────────────────
+
+  finanse_import_koszt_wczoraj_pln:
+    unique_id: "finanse_import_koszt_wczoraj_pln"
+    friendly_name: "Finanse: koszt importu wczoraj"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_eksport_przychod_wczoraj_pln:
+    unique_id: "finanse_eksport_przychod_wczoraj_pln"
+    friendly_name: "Finanse: przychód eksportu wczoraj"
+    icon: "mdi:transmission-tower-export"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_oszczednosc_vs_g12_wczoraj_pln:
+    unique_id: "finanse_oszczednosc_vs_g12_wczoraj_pln"
+    friendly_name: "Finanse: oszczędność vs G12 wczoraj"
+    icon: "mdi:piggy-bank"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_oszczednosc_vs_g11_wczoraj_pln:
+    unique_id: "finanse_oszczednosc_vs_g11_wczoraj_pln"
+    friendly_name: "Finanse: oszczędność vs G11 wczoraj"
+    icon: "mdi:piggy-bank"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+# ── Template sensors (live, bez var) ──────────────────────────────────────────
+
+template:
+  - sensor:
+      - name: "Finanse: oszczędność vs G12 dziś"
+        unique_id: "finanse_oszczednosc_vs_g12_dzis"
+        unit_of_measurement: "PLN"
+        icon: mdi:piggy-bank-outline
+        state: >
+          {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
+          {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
+          {% set kontrafakt = states('var.finanse_kontrafakt_g12_dzis_pln') | float(0) %}
+          {{ (kontrafakt - (import_k - eksport_p)) | round(2) }}
+
+      - name: "Finanse: oszczędność vs G11 dziś"
+        unique_id: "finanse_oszczednosc_vs_g11_dzis"
+        unit_of_measurement: "PLN"
+        icon: mdi:piggy-bank
+        state: >
+          {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
+          {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
+          {% set kontrafakt = states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) %}
+          {{ (kontrafakt - (import_k - eksport_p)) | round(2) }}
+
+      - name: "Finanse: koszt netto dziś"
+        unique_id: "finanse_koszt_netto_dzis"
+        unit_of_measurement: "PLN"
+        icon: mdi:cash
+        state: >
+          {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
+          {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
+          {{ (import_k - eksport_p) | round(2) }}
+
+# ── Automatyzacje ──────────────────────────────────────────────────────────────
+
+automation:
+
+  # Akumulacja kosztów co 15 min
+  - id: finanse_pv_akumulacja_15min
+    alias: "Finanse PV: akumulacja kosztów co 15 min"
+    description: >
+      Co 15 min liczy deltę bought/sold/cons od poprzedniego triggera,
+      wyszukuje cenę RCE dla obliczanego slotu (nie bieżącego triggera)
+      i akumuluje koszty/przychody do dziennych varów.
+    trigger:
+      - platform: time_pattern
+        minutes: "/15"
+    action:
+      - variables:
+          bought_now: "{{ states('sensor.solarman_total_energy_bought_safe') | float(0) }}"
+          sold_now: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
+          cons_now: "{{ states('sensor.solarman_total_load_consumption') | float(0) }}"
+          prev_bought: "{{ states('var.finanse_prev_bought_kwh') | float(0) }}"
+          prev_sold: "{{ states('var.finanse_prev_sold_kwh') | float(0) }}"
+          prev_cons: "{{ states('var.finanse_prev_cons_kwh') | float(0) }}"
+          prev_time_str: "{{ states('var.finanse_prev_trigger_time') }}"
+
+      - variables:
+          # Delta — zabezpieczenie przed: spike >3 kWh/15min (>12 kW), reset licznika (delta<0), inicjalizacja (prev=0)
+          delta_bought: >
+            {% set d = bought_now - prev_bought %}
+            {{ d if (prev_bought > 0 and d >= 0 and d < 3) else 0 }}
+          delta_sold: >
+            {% set d = sold_now - prev_sold %}
+            {{ d if (prev_sold > 0 and d >= 0 and d < 3) else 0 }}
+          delta_cons: >
+            {% set d = cons_now - prev_cons %}
+            {{ d if (prev_cons > 0 and d >= 0 and d < 5) else 0 }}
+
+          # Cena RCE dla slotu który właśnie minął: prev_time + 15min = dtime wpisu
+          cena_sprzedazy_kwh: >
+            {% set ceny = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
+            {% if prev_time_str == '2000-01-01 00:00:00' or ceny | length == 0 %}
+              0
+            {% else %}
+              {% set prev_ts = as_local(as_datetime(prev_time_str)) %}
+              {% set slot_end = prev_ts + timedelta(minutes=15) %}
+              {% set rce = namespace(v=0, found=false) %}
+              {% for c in ceny %}
+                {% set dt = as_local(as_datetime(c.dtime)) %}
+                {% if dt.hour == slot_end.hour and dt.minute == slot_end.minute and not rce.found %}
+                  {% set rce.v = c.rce_pln | float(0) / 1000 %}
+                  {% set rce.found = true %}
+                {% endif %}
+              {% endfor %}
+              {{ rce.v }}
+            {% endif %}
+
+          # Cena G12 dla obliczanego slotu (prev_time = start slotu)
+          cena_g12_kwh: >
+            {% set prev_ts = as_local(as_datetime(prev_time_str)) %}
+            {% set h = prev_ts.hour %}
+            {% if (h >= 13 and h < 15) or h >= 22 or h < 6 %}
+              {{ states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) }}
+            {% else %}
+              {{ states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) }}
+            {% endif %}
+
+          cena_g11_kwh: "{{ states('var.g11_cena_kwh') | float(0.96) }}"
+
+          # Kwoty dla tego slotu
+          slot_import_koszt: "{{ delta_bought * cena_g12_kwh }}"
+          slot_eksport_przychod: "{{ delta_sold * cena_sprzedazy_kwh }}"
+          slot_kontrafakt_g12: "{{ delta_cons * cena_g12_kwh }}"
+          slot_kontrafakt_g11: "{{ delta_cons * cena_g11_kwh }}"
+
+      # Akumuluj do dziennych varów
+      - service: var.set
+        data:
+          entity_id: var.finanse_import_koszt_dzis_pln
+          value: >
+            {{ (states('var.finanse_import_koszt_dzis_pln') | float(0) + slot_import_koszt) | round(4) }}
+
+      - service: var.set
+        data:
+          entity_id: var.finanse_eksport_przychod_dzis_pln
+          value: >
+            {{ (states('var.finanse_eksport_przychod_dzis_pln') | float(0) + slot_eksport_przychod) | round(4) }}
+
+      - service: var.set
+        data:
+          entity_id: var.finanse_kontrafakt_g12_dzis_pln
+          value: >
+            {{ (states('var.finanse_kontrafakt_g12_dzis_pln') | float(0) + slot_kontrafakt_g12) | round(4) }}
+
+      - service: var.set
+        data:
+          entity_id: var.finanse_kontrafakt_g11_dzis_pln
+          value: >
+            {{ (states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) + slot_kontrafakt_g11) | round(4) }}
+
+      # Zapisz poprzednie wartości liczników i czas triggera
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_bought_kwh
+          value: "{{ bought_now }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_sold_kwh
+          value: "{{ sold_now }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_cons_kwh
+          value: "{{ cons_now }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_trigger_time
+          value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  # Reset o 23:59 — zapisz wczorajsze dane i wyzeruj akumulatory
+  - id: finanse_pv_reset_dzienny
+    alias: "Finanse PV: reset dzienny 23:59"
+    trigger:
+      - platform: time
+        at: "23:59:00"
+    action:
+      - variables:
+          import_k: "{{ states('var.finanse_import_koszt_dzis_pln') | float(0) }}"
+          eksport_p: "{{ states('var.finanse_eksport_przychod_dzis_pln') | float(0) }}"
+          kontrafakt_g12: "{{ states('var.finanse_kontrafakt_g12_dzis_pln') | float(0) }}"
+          kontrafakt_g11: "{{ states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) }}"
+          koszt_netto: "{{ import_k - eksport_p }}"
+
+      # Zapisz wczorajsze dane
+      - service: var.set
+        data:
+          entity_id: var.finanse_import_koszt_wczoraj_pln
+          value: "{{ import_k | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_eksport_przychod_wczoraj_pln
+          value: "{{ eksport_p | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_vs_g12_wczoraj_pln
+          value: "{{ (kontrafakt_g12 - koszt_netto) | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_vs_g11_wczoraj_pln
+          value: "{{ (kontrafakt_g11 - koszt_netto) | round(4) }}"
+
+      # Wyślij podsumowanie
+      - service: notify.persistent_notification
+        data:
+          title: "💰 Finanse PV – podsumowanie dnia {{ now().strftime('%d.%m.%Y') }}"
+          message: >
+            Import z sieci: {{ import_k | round(2) }} PLN
+            Przychód eksportu: {{ eksport_p | round(2) }} PLN
+            Koszt netto: {{ koszt_netto | round(2) }} PLN
+
+            Kontrafakt G12: {{ kontrafakt_g12 | round(2) }} PLN
+            Kontrafakt G11: {{ kontrafakt_g11 | round(2) }} PLN
+
+            💚 Oszczędność vs G12: {{ (kontrafakt_g12 - koszt_netto) | round(2) }} PLN
+            💚 Oszczędność vs G11: {{ (kontrafakt_g11 - koszt_netto) | round(2) }} PLN
+
+      # Zeruj akumulatory
+      - service: var.set
+        data:
+          entity_id: var.finanse_import_koszt_dzis_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_eksport_przychod_dzis_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_kontrafakt_g12_dzis_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_kontrafakt_g11_dzis_pln
+          value: 0
