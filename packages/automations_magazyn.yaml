@@ -1170,10 +1170,11 @@ automation:
             {% set powod = 'LOWPV' %}
           {% endif %}
 
-          {# ===== URLOP: +1 kWh ponad wyliczenie, bez full ===== #}
+          {# ===== URLOP: +1 kWh ponad wyliczenie, bez full, z catem o E6_safe_max ===== #}
           {% if urlop_any %}
             {% set grid_add_u = grid_add_u + 1.0 %}
             {% set grid_add_u = [grid_add_u, (max_ene_u - E6_base)] | min %}
+            {% set grid_add_u = [grid_add_u, [E6_safe_max - E6_base, 0] | max] | min %}
             {% set E_start_u_new = E6_base + grid_add_u %}
             {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
             {% if cel < 25 %}{% set cel = 25 %}{% endif %}
