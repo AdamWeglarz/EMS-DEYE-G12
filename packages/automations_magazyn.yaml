@@ -1808,8 +1808,8 @@ automation:
             {% set powod = 'LOWPV' %}
           {% endif %}
 
-          {# ===== URLOP: +1 kWh ponad wyliczenie, bez full ===== #}
-          {% if urlop_any %}
+          {# ===== URLOP: +1 kWh ponad wyliczenie, bez full, tylko gdy brak blokady spill ===== #}
+          {% if urlop_any and not blokada_spill %}
             {% set grid_add_u = grid_add_u + 1.0 %}
             {% set grid_add_u = [grid_add_u, (max_ene_u - E15_base)] | min %}
             {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
