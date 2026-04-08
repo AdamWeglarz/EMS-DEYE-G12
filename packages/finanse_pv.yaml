@@ -127,6 +127,42 @@ var:
     initial_value: 0
     restore: true
 
+  # ── Akumulatory skumulowane (całkowite od początku śledzenia) ──────────────
+
+  finanse_oszczednosc_skumulowana_g12_pln:
+    unique_id: "finanse_oszczednosc_skumulowana_g12_pln"
+    friendly_name: "Finanse: oszczędność skumulowana vs G12"
+    icon: "mdi:piggy-bank"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_oszczednosc_skumulowana_g11_pln:
+    unique_id: "finanse_oszczednosc_skumulowana_g11_pln"
+    friendly_name: "Finanse: oszczędność skumulowana vs G11"
+    icon: "mdi:piggy-bank"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  # ── Offset – wartość wyliczona przed uruchomieniem śledzenia ──────────────
+
+  finanse_oszczednosc_offset_g12_pln:
+    unique_id: "finanse_oszczednosc_offset_g12_pln"
+    friendly_name: "Finanse: offset oszczędności vs G12"
+    icon: "mdi:plus-box"
+    unit_of_measurement: "PLN"
+    initial_value: 6174.75
+    restore: true
+
+  finanse_oszczednosc_offset_g11_pln:
+    unique_id: "finanse_oszczednosc_offset_g11_pln"
+    friendly_name: "Finanse: offset oszczędności vs G11"
+    icon: "mdi:plus-box"
+    unit_of_measurement: "PLN"
+    initial_value: 6174.75
+    restore: true
+
 # ── Template sensors (live, bez var) ──────────────────────────────────────────
 
 template:
@@ -150,6 +186,26 @@ template:
           {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
           {% set kontrafakt = states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) %}
           {{ (kontrafakt - (import_k - eksport_p)) | round(2) }}
+
+      - name: "Finanse: oszczędność całkowita vs G12"
+        unique_id: "finanse_oszczednosc_calkowita_g12"
+        unit_of_measurement: "PLN"
+        icon: mdi:piggy-bank
+        state: >
+          {% set skum = states('var.finanse_oszczednosc_skumulowana_g12_pln') | float(0) %}
+          {% set offset = states('var.finanse_oszczednosc_offset_g12_pln') | float(0) %}
+          {% set dzis = states('sensor.finanse_oszczednosc_vs_g12_dzis') | float(0) %}
+          {{ (skum + offset + dzis) | round(2) }}
+
+      - name: "Finanse: oszczędność całkowita vs G11"
+        unique_id: "finanse_oszczednosc_calkowita_g11"
+        unit_of_measurement: "PLN"
+        icon: mdi:piggy-bank
+        state: >
+          {% set skum = states('var.finanse_oszczednosc_skumulowana_g11_pln') | float(0) %}
+          {% set offset = states('var.finanse_oszczednosc_offset_g11_pln') | float(0) %}
+          {% set dzis = states('sensor.finanse_oszczednosc_vs_g11_dzis') | float(0) %}
+          {{ (skum + offset + dzis) | round(2) }}
 
       - name: "Finanse: koszt netto dziś"
         unique_id: "finanse_koszt_netto_dzis"
@@ -307,6 +363,20 @@ automation:
         data:
           entity_id: var.finanse_oszczednosc_vs_g11_wczoraj_pln
           value: "{{ (kontrafakt_g11 - koszt_netto) | round(4) }}"
+
+      # Dodaj do akumulatorów skumulowanych
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_skumulowana_g12_pln
+          value: >
+            {{ (states('var.finanse_oszczednosc_skumulowana_g12_pln') | float(0)
+                + (kontrafakt_g12 - koszt_netto)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_skumulowana_g11_pln
+          value: >
+            {{ (states('var.finanse_oszczednosc_skumulowana_g11_pln') | float(0)
+                + (kontrafakt_g11 - koszt_netto)) | round(4) }}
 
       # Wyślij podsumowanie
       - service: notify.persistent_notification
