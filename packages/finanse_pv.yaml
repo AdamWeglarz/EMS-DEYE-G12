@@ -163,6 +163,32 @@ var:
     initial_value: 6174.75
     restore: true
 
+  # ── Zysk ze sprzedaży (eksport − koszt ładowania z grid pod sprzedaż) ─────
+
+  finanse_koszt_ladowania_pod_sprzedaz_dzis_pln:
+    unique_id: "finanse_koszt_ladowania_pod_sprzedaz_dzis_pln"
+    friendly_name: "Finanse: koszt ładowania z grid pod sprzedaż dziś"
+    icon: "mdi:battery-charging-outline"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_zysk_sprzedazy_skumulowany_pln:
+    unique_id: "finanse_zysk_sprzedazy_skumulowany_pln"
+    friendly_name: "Finanse: zysk ze sprzedaży skumulowany"
+    icon: "mdi:cash-plus"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_zysk_sprzedazy_offset_pln:
+    unique_id: "finanse_zysk_sprzedazy_offset_pln"
+    friendly_name: "Finanse: offset zysku ze sprzedaży"
+    icon: "mdi:plus-box"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
 # ── Template sensors (live, bez var) ──────────────────────────────────────────
 
 template:
@@ -215,6 +241,25 @@ template:
           {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
           {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
           {{ (import_k - eksport_p) | round(2) }}
+
+      - name: "Finanse: zysk ze sprzedaży dziś"
+        unique_id: "finanse_zysk_sprzedazy_dzis"
+        unit_of_measurement: "PLN"
+        icon: mdi:cash-plus
+        state: >
+          {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
+          {% set koszt_ladowania = states('var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln') | float(0) %}
+          {{ (eksport_p - koszt_ladowania) | round(2) }}
+
+      - name: "Finanse: zysk ze sprzedaży całkowity"
+        unique_id: "finanse_zysk_sprzedazy_calkowity"
+        unit_of_measurement: "PLN"
+        icon: mdi:cash-multiple
+        state: >
+          {% set skum = states('var.finanse_zysk_sprzedazy_skumulowany_pln') | float(0) %}
+          {% set offset = states('var.finanse_zysk_sprzedazy_offset_pln') | float(0) %}
+          {% set dzis = states('sensor.finanse_zysk_sprzedazy_dzis') | float(0) %}
+          {{ (skum + offset + dzis) | round(2) }}
 
 # ── Automatyzacje ──────────────────────────────────────────────────────────────
 
@@ -288,6 +333,14 @@ automation:
           slot_eksport_przychod: "{{ delta_sold * cena_sprzedazy_kwh }}"
           slot_kontrafakt_g12: "{{ delta_cons * cena_g12_kwh }}"
           slot_kontrafakt_g11: "{{ delta_cons * cena_g11_kwh }}"
+          # Koszt ładowania z grid pod sprzedaż (tylko gdy tryb = ładowanie z sieci)
+          slot_koszt_ladowania_pod_sprzedaz: >
+            {% set tryb = states('sensor.solarman_mode_status') %}
+            {% if tryb in ['Ładuje z Grid', 'Start ładowania z Grid (konfiguracja w toku)'] %}
+              {{ delta_bought * cena_g12_kwh }}
+            {% else %}
+              0
+            {% endif %}
 
       # Akumuluj do dziennych varów
       - service: var.set
@@ -313,6 +366,12 @@ automation:
           entity_id: var.finanse_kontrafakt_g11_dzis_pln
           value: >
             {{ (states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) + slot_kontrafakt_g11) | round(4) }}
+
+      - service: var.set
+        data:
+          entity_id: var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln
+          value: >
+            {{ (states('var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln') | float(0) + slot_koszt_ladowania_pod_sprzedaz) | round(4) }}
 
       # Zapisz poprzednie wartości liczników i czas triggera
       - service: var.set
@@ -345,6 +404,8 @@ automation:
           kontrafakt_g12: "{{ states('var.finanse_kontrafakt_g12_dzis_pln') | float(0) }}"
           kontrafakt_g11: "{{ states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) }}"
           koszt_netto: "{{ import_k - eksport_p }}"
+          koszt_ladowania_pod_sprzedaz: "{{ states('var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln') | float(0) }}"
+          zysk_sprzedazy: "{{ eksport_p - koszt_ladowania_pod_sprzedaz }}"
 
       # Zapisz wczorajsze dane
       - service: var.set
@@ -377,6 +438,12 @@ automation:
           value: >
             {{ (states('var.finanse_oszczednosc_skumulowana_g11_pln') | float(0)
                 + (kontrafakt_g11 - koszt_netto)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_zysk_sprzedazy_skumulowany_pln
+          value: >
+            {{ (states('var.finanse_zysk_sprzedazy_skumulowany_pln') | float(0)
+                + zysk_sprzedazy) | round(4) }}
 
       # Wyślij podsumowanie
       - service: notify.persistent_notification
@@ -392,6 +459,10 @@ automation:
 
             💚 Oszczędność vs G12: {{ (kontrafakt_g12 - koszt_netto) | round(2) }} PLN
             💚 Oszczędność vs G11: {{ (kontrafakt_g11 - koszt_netto) | round(2) }} PLN
+
+            Przychód eksportu: {{ eksport_p | round(2) }} PLN
+            Koszt ładowania pod sprzedaż: {{ koszt_ladowania_pod_sprzedaz | round(2) }} PLN
+            💰 Zysk ze sprzedaży: {{ zysk_sprzedazy | round(2) }} PLN
 
       # Zeruj akumulatory
       - service: var.set
@@ -409,4 +480,8 @@ automation:
       - service: var.set
         data:
           entity_id: var.finanse_kontrafakt_g11_dzis_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln
           value: 0
