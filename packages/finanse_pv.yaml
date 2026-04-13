@@ -329,15 +329,15 @@ automation:
           cena_g11_kwh: "{{ states('var.g11_cena_kwh') | float(0.96) }}"
 
           # Kwoty dla tego slotu
-          slot_import_koszt: "{{ delta_bought * cena_g12_kwh }}"
-          slot_eksport_przychod: "{{ delta_sold * cena_sprzedazy_kwh }}"
-          slot_kontrafakt_g12: "{{ delta_cons * cena_g12_kwh }}"
-          slot_kontrafakt_g11: "{{ delta_cons * cena_g11_kwh }}"
+          slot_import_koszt: "{{ delta_bought | float(0) * cena_g12_kwh | float(0) }}"
+          slot_eksport_przychod: "{{ delta_sold | float(0) * cena_sprzedazy_kwh | float(0) }}"
+          slot_kontrafakt_g12: "{{ delta_cons | float(0) * cena_g12_kwh | float(0) }}"
+          slot_kontrafakt_g11: "{{ delta_cons | float(0) * cena_g11_kwh | float(0) }}"
           # Koszt ładowania z grid pod sprzedaż (tylko gdy tryb = ładowanie z sieci)
           slot_koszt_ladowania_pod_sprzedaz: >
             {% set tryb = states('sensor.solarman_mode_status') %}
             {% if tryb in ['Ładuje z Grid', 'Start ładowania z Grid (konfiguracja w toku)'] %}
-              {{ delta_bought * cena_g12_kwh }}
+              {{ delta_bought | float(0) * cena_g12_kwh | float(0) }}
             {% else %}
               0
             {% endif %}
