@@ -141,6 +141,24 @@ template:
       availability: "{{ states('sensor.solarman_load_ups_power') not in ['unavailable', 'unknown'] }}"
 
   - sensor:
+    - name: "Solarman Microinverter Power Safe"
+      unique_id: solarman_microinverter_power_safe
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      icon: mdi:solar-power
+      state: >
+        {% set power = states('sensor.solarman_microinverter_power') | float(default=none) %}
+        {% if power == none %}
+          0
+        {% elif power < 0 or power > 20000 %}
+          {{ states('sensor.solarman_microinverter_power_safe') | float(0) }}
+        {% else %}
+          {{ power }}
+        {% endif %}
+      availability: true
+
+  - sensor:
     - name: "Moc pobierana / oddawana z sieci"
       unique_id: grid_power_filtered
       unit_of_measurement: "W"
@@ -419,7 +437,7 @@ sensor:
   - platform: statistics
     name: Średnia moc z PV 5 minut
     unique_id: srednia_moc_PV_5_minut
-    entity_id: sensor.solaredge_ac_power
+    entity_id: sensor.solarman_microinverter_power_safe
     max_age:
       minutes: 5
     state_characteristic: average_linear
@@ -435,8 +453,8 @@ sensor:
     sampling_size: 150
 
   - platform: min_max
-    name: Dzienna maksymalna moc SolarEdge
+    name: Dzienna maksymalna moc mikroinwertera
     unique_id: solaredge_peak_power_daily
     type: max
     entity_ids:
-      - sensor.solaredge_ac_power
+      - sensor.solarman_microinverter_power_safe

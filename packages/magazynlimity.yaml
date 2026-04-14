@@ -48,7 +48,7 @@ template:
         delay_on:
           minutes: 15
         state: >
-          {{ states('sensor.solaredge_ac_power') | float(999999) < 30 }}
+          {{ states('sensor.solarman_microinverter_power_safe') | float(999999) < 30 }}
 
       - name: "PV zaniklo dla logiki eksportu"
         unique_id: pv_zaniklo_dla_logiki_eksportu
