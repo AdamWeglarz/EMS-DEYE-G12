@@ -1,4 +1,162 @@
 template:
+
+# Template sensors - nie da się ich edytować z UI
+
+  - sensor:
+      - name: "Bateria Energia kWh"
+        unique_id: "bateria_energia_kwh_15kwh_calc"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:battery-high
+        state: >
+          {% set soc = states('sensor.solarman_battery') | float(0) %}
+          {% set capacity = 15.0 %}
+          {{ ((soc / 100) * capacity) | round(2) }}
+
+  - sensor:
+      - name: "Długość dnia PV"
+        unique_id: dlugosc_dnia_pv
+        unit_of_measurement: "h"
+        state: >
+          {% set sunrise = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
+          {% set sunset = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+          {% if sunrise > sunset %}
+            {% set today_sunrise = sunrise - 86400 %}
+            {% set today_sunset = sunset %}
+          {% else %}
+            {% set today_sunrise = sunrise %}
+            {% set today_sunset = sunset %}
+          {% endif %}
+          {% set start = today_sunrise + 3600 %}
+          {% set end = today_sunset - 3600 %}
+          {% set duration = (end - start) / 3600 %}
+          {{ [duration, 0] | max | round(2) }}
+
+  - sensor:
+      - name: "Tryb działania Solarman"
+        unique_id: solarman_mode_status
+        state: >
+          {% set work_mode = states('select.solarman_work_mode') %}
+          {% set discharge_current = states('number.solarman_battery_max_discharging_current') | float(0) %}
+          {% set grid_charging = is_state('switch.solarman_battery_grid_charging', 'on') %}
+
+          {% set charge_from_grid = is_state('input_boolean.battery_charge_from_grid', 'on') %}
+          {% set battery_to_grid = is_state('input_boolean.battery_discharge_to_grid', 'on') %}
+          {% set pv_to_grid = is_state('input_boolean.pv_discharge_to_grid', 'on') %}
+
+          {% set prog1 = states('select.solarman_program_1_charging') %}
+          {% set prog2 = states('select.solarman_program_2_charging') %}
+          {% set prog3 = states('select.solarman_program_3_charging') %}
+          {% set prog4 = states('select.solarman_program_4_charging') %}
+          {% set prog5 = states('select.solarman_program_5_charging') %}
+          {% set prog6 = states('select.solarman_program_6_charging') %}
+
+          {% set soc1 = states('number.solarman_program_1_soc') | int(0) %}
+          {% set soc2 = states('number.solarman_program_2_soc') | int(0) %}
+          {% set soc3 = states('number.solarman_program_3_soc') | int(0) %}
+          {% set soc4 = states('number.solarman_program_4_soc') | int(0) %}
+          {% set soc5 = states('number.solarman_program_5_soc') | int(0) %}
+          {% set soc6 = states('number.solarman_program_6_soc') | int(0) %}
+
+          {% set target_soc = states('input_number.manual_battery_charge_limit') | int(100) %}
+
+          {% set programs = [prog1, prog2, prog3, prog4, prog5, prog6] %}
+          {% set socs = [soc1, soc2, soc3, soc4, soc5, soc6] %}
+
+          {% set all_grid = programs == ['Grid', 'Grid', 'Grid', 'Grid', 'Grid', 'Grid'] %}
+          {% set any_grid = 'Grid' in programs %}
+          {% set all_disabled = programs == ['Disabled', 'Disabled', 'Disabled', 'Disabled', 'Disabled', 'Disabled'] %}
+          {% set all_soc_20 = socs == [20, 20, 20, 20, 20, 20] %}
+          {% set all_soc_target = socs == [target_soc, target_soc, target_soc, target_soc, target_soc, target_soc] %}
+
+          {% set mode_charge_ok = grid_charging and all_grid and all_soc_target %}
+          {% set mode_pv_ok = (work_mode == 'Export First') and (discharge_current == 0) and all_disabled and all_soc_20 and (not grid_charging) %}
+          {% set mode_batt_ok = (work_mode == 'Export First') and (discharge_current >= 100) and all_disabled and all_soc_20 and (not grid_charging) %}
+          {% set mode_normal_ok = (work_mode == 'Zero Export To CT') and (discharge_current >= 100) and all_disabled and all_soc_20 and (not grid_charging) %}
+
+          {% if charge_from_grid and mode_charge_ok %}
+            Ładuje z Grid
+          {% elif pv_to_grid and mode_pv_ok %}
+            Oddaje nadwyżkę PV
+          {% elif battery_to_grid and mode_batt_ok %}
+            Oddaje z baterii do sieci
+          {% elif (not charge_from_grid) and (not pv_to_grid) and (not battery_to_grid) and mode_normal_ok %}
+            Normalna praca (Bateria/Dom)
+          {% elif charge_from_grid %}
+            Start ładowania z Grid (konfiguracja w toku)
+          {% elif pv_to_grid %}
+            Start oddawania PV (konfiguracja w toku)
+          {% elif battery_to_grid %}
+            Start oddawania z baterii (konfiguracja w toku)
+          {% else %}
+            Inna konfiguracja
+          {% endif %}
+        icon: >
+          {% set stan = this.state %}
+          {% if stan == 'Oddaje nadwyżkę PV' %}
+            mdi:solar-power
+          {% elif stan == 'Oddaje z baterii do sieci' %}
+            mdi:battery-arrow-up
+          {% elif stan == 'Ładuje z Grid' %}
+            mdi:transmission-tower-import
+          {% elif stan == 'Normalna praca (Bateria/Dom)' %}
+            mdi:home-battery
+          {% elif stan == 'Start ładowania z Grid (konfiguracja w toku)' %}
+            mdi:battery-clock
+          {% elif stan == 'Start oddawania PV (konfiguracja w toku)' %}
+            mdi:solar-power-variant-outline
+          {% elif stan == 'Start oddawania z baterii (konfiguracja w toku)' %}
+            mdi:battery-sync
+          {% else %}
+            mdi:cog-transfer-outline
+          {% endif %}
+
+  - sensor:
+    - name: "Moc pobierana przez dom"
+      unique_id: load_power_filtered
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      state: >
+        {% set source = states('sensor.solarman_load_ups_power') %}
+        {% if source in ['unavailable', 'unknown'] %}
+          unknown
+        {% else %}
+          {% set power = source | float(default=0) %}
+          {% if power > 20000 or power < -20000 %}
+            {# Zwraca poprzedni stan sensora zamiast błędu, aby uniknąć dziur w wykresie #}
+            {{ states('sensor.moc_pobierana_przez_dom') }}
+          {% else %}
+            {{ power }}
+          {% endif %}
+        {% endif %}
+      attributes:
+        original_entity: sensor.solarman_load_ups_power
+        filter_type: "peak_removal"
+        threshold_high: 20000
+        threshold_low: -20000
+        last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      icon: mdi:home-lightning-bolt
+      availability: "{{ states('sensor.solarman_load_ups_power') not in ['unavailable', 'unknown'] }}"
+
+  - sensor:
+    - name: "Moc pobierana / oddawana z sieci"
+      unique_id: grid_power_filtered
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      state: >
+        {% set power = states('sensor.solarman_external_power') | float(default=none) %}
+        {% if power == none %}
+          unknown
+        {% elif power > 20000 or power < -20000 %}
+          {{ states('sensor.grid_power_filtered') }}
+        {% else %}
+          {{ power }}
+        {% endif %}
+      availability: "{{ states('sensor.solarman_external_power') not in ['unavailable', 'unknown', 'none'] }}"
+
   - trigger:
       - platform: state
         entity_id: sensor.solarman_total_energy_bought
@@ -257,3 +415,37 @@ template:
           {% endif %}
 
         availability: true
+sensor:
+  - platform: statistics
+    name: Średnia moc zużycia domu z 1h
+    unique_id: srednia_moc_zuzycia_domu_1h
+    entity_id: sensor.moc_pobierana_przez_dom_straty
+    max_age:
+      hours: 1
+    state_characteristic: average_linear
+    sampling_size: 1200
+
+  - platform: statistics
+    name: Średnia moc z PV 5 minut
+    unique_id: srednia_moc_PV_5_minut
+    entity_id: sensor.solaredge_ac_power
+    max_age:
+      minutes: 5
+    state_characteristic: average_linear
+    sampling_size: 150
+
+  - platform: statistics
+    name: Średnia moc pobierana przez dom 2 5 minut
+    unique_id: srednia_moc_pobierana_przez_dom_2_5_minut
+    entity_id: sensor.moc_pobierana_przez_dom_2
+    max_age:
+      minutes: 5
+    state_characteristic: average_linear
+    sampling_size: 150
+
+  - platform: min_max
+    name: Dzienna maksymalna moc SolarEdge
+    unique_id: solaredge_peak_power_daily
+    type: max
+    entity_ids:
+      - sensor.solaredge_ac_power

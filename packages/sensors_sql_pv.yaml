@@ -1,0 +1,41 @@
+###############################################################################
+# SQL SENSORY – zarządzanie PV / magazynem
+# Oddzielny plik – configuration.yaml zawiera hasła do bazy danych
+###############################################################################
+
+sql:
+  - name: "Oddana energia biezacy slot 15min"
+    unique_id: "sql_energy_sold_current_slot_15min"
+    query: >
+      SELECT ROUND(MAX(st.sum) - MIN(st.sum), 4) AS value
+      FROM statistics_short_term st
+      JOIN statistics_meta sm ON st.metadata_id = sm.id
+      WHERE sm.statistic_id = 'sensor.solarman_total_energy_sold_safe'
+        AND st.start_ts >= FLOOR((UNIX_TIMESTAMP(NOW()) - 5) / 900) * 900
+        AND st.start_ts <  FLOOR((UNIX_TIMESTAMP(NOW()) - 5) / 900) * 900 + 900;
+    column: "value"
+    unit_of_measurement: "kWh"
+
+  - name: "Oddana energia dzis 6-13"
+    unique_id: "sql_energy_sold_today_0613"
+    query: >
+      SELECT ROUND(MAX(st.sum) - MIN(st.sum), 4) AS value
+      FROM statistics_short_term st
+      JOIN statistics_meta sm ON st.metadata_id = sm.id
+      WHERE sm.statistic_id = 'sensor.solarman_total_energy_sold_safe'
+        AND st.start_ts >= UNIX_TIMESTAMP(CONCAT(DATE(NOW()), ' 06:00:00'))
+        AND st.start_ts <  UNIX_TIMESTAMP(CONCAT(DATE(NOW()), ' 13:00:00'));
+    column: "value"
+    unit_of_measurement: "kWh"
+
+  - name: "Oddana energia dzis 15-22"
+    unique_id: "sql_energy_sold_today_1522"
+    query: >
+      SELECT ROUND(MAX(st.sum) - MIN(st.sum), 4) AS value
+      FROM statistics_short_term st
+      JOIN statistics_meta sm ON st.metadata_id = sm.id
+      WHERE sm.statistic_id = 'sensor.solarman_total_energy_sold_safe'
+        AND st.start_ts >= UNIX_TIMESTAMP(CONCAT(DATE(NOW()), ' 15:00:00'))
+        AND st.start_ts <  UNIX_TIMESTAMP(CONCAT(DATE(NOW()), ' 22:00:00'));
+    column: "value"
+    unit_of_measurement: "kWh"
