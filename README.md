@@ -47,7 +47,7 @@ Zaawansowany system zarządzania energią zbudowany w Home Assistant, sterujący
 | [`solarman`](https://github.com/StephanJoubert/home_assistant_solarman) | Odczyty z falownika + sterowanie trybami (HACS) |
 | [`solcast-solar`](https://github.com/BJReplay/ha-solcast-solar) | Prognoza PV – tryb `detailedHourly`; wymagany darmowy token API |
 | [`pirateweather`](https://github.com/alexander0042/pirate-weather-ha) | Prognoza pogody – korekta minimalnego SOC rano (HACS) |
-| [`pge_tge`](https://github.com/...) | Sensor cen RCE z VAT: `sensor.rce_prices_today_scaled` / `tomorrow_scaled` |
+| [`rce_prices`](https://github.com/AdamWeglarz/rce_prices) | Sensor cen RCE z VAT: `sensor.rce_prices_today_scaled` / `tomorrow_scaled` |
 | [`snarky-snark/home-assistant-variables`](https://github.com/snarky-snark/home-assistant-variables) | Zmienne `var.*` – konfigurowalne parametry EMS (HACS) |
 
 ### Kalendarze (opcjonalne, modyfikują planowanie)
