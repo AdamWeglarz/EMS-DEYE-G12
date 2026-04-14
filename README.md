@@ -234,7 +234,7 @@ O 22:00 system planuje całą noc JUTRO (22:00 → 13:00 następnego dnia):
 
 ---
 
-## Bilansowanie godzinowe (wymóg prawny)
+## Bilansowanie godzinowe
 
 Zgodnie z prawem energetycznym, prosumenci są rozliczani w bilansowaniu **godzinowym** (pełna godzina zegarowa). System uwzględnia to przy planowaniu eksportu:
 
