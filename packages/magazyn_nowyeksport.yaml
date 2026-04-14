@@ -2609,6 +2609,11 @@ automation:
         data:
           entity_id: var.magazyn_eksport_snapshot_hh00
           value: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
+      # Reset celu domykacza — nowa godzina, stary target nieaktualny
+      - service: var.set
+        data:
+          entity_id: var.magazyn_domykacz_exp_target
+          value: "0"
 
   - id: magazyn_domykacz_godziny_hh45_v1_0
     alias: "Magazyn: Domykacz godziny (HH:45) v1.0"
@@ -2665,6 +2670,7 @@ automation:
             {%- elif deficit_raw <= 0.05 %}no_deficit
             {%- elif e_available_kwh <= 0.05 %}soc_floor
             {%- else %}OK{%- endif %}
+          was_discharging: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
 
       - service: script.ems_notify
         data:
@@ -2680,6 +2686,7 @@ automation:
             | snap_fresh={{ snap_is_fresh }}
             | imp_snap={{ imp_snap | round(3) }} kWh
             | exp_snap={{ exp_snap | round(3) }} kWh
+            | was_discharging={{ was_discharging }}
 
       - condition: template
         value_template: "{{ snap_is_fresh and deficit_allowed > 0.05 }}"
@@ -2687,3 +2694,46 @@ automation:
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.battery_discharge_to_grid
+
+      # Twardy stop: zapisz bezwzględny cel eksportu do var.
+      # STOPPER_DOMYKACZ monitoruje sensor.solarman_total_energy_sold_safe
+      # i wyłącza discharge gdy target zostanie osiągnięty.
+      # Jeśli planer już wcześniej włączył discharge (was_discharging=true),
+      # nie ustawiamy targetu — planer sam zarządza dalej.
+      - condition: template
+        value_template: "{{ not was_discharging }}"
+
+      - service: var.set
+        data:
+          entity_id: var.magazyn_domykacz_exp_target
+          value: "{{ (exp_snap + deficit_allowed) | round(3) }}"
+
+  ###############################################################################
+  # STOPPER DOMYKACZA: wyłącz discharge gdy total_energy_sold_safe >= target
+  ###############################################################################
+  - id: magazyn_stopper_domykacz_exp_target
+    alias: "Magazyn: STOP domykacz – eksport >= cel"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.solarman_total_energy_sold_safe
+    action:
+      - variables:
+          exp_now: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
+          target: "{{ states('var.magazyn_domykacz_exp_target') | float(0) }}"
+          discharging: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
+      - condition: template
+        value_template: "{{ target > 0 and discharging and exp_now >= target }}"
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.battery_discharge_to_grid
+      - service: var.set
+        data:
+          entity_id: var.magazyn_domykacz_exp_target
+          value: "0"
+      - service: script.ems_notify
+        data:
+          title: "Domykacz STOP: cel osiągnięty"
+          message: >-
+            exp_now={{ exp_now | round(3) }} kWh >= target={{ target | round(3) }} kWh
+            → battery_discharge_to_grid OFF

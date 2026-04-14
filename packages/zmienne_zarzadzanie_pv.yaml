@@ -406,3 +406,10 @@ var:
     icon: mdi:transmission-tower-export
     initial_value: 0
     restore: true
+
+  magazyn_domykacz_exp_target:
+    unique_id: magazyn_domykacz_exp_target
+    friendly_name: "Magazyn: domykacz – cel eksportu (kWh całkowity)"
+    icon: mdi:target
+    initial_value: 0
+    restore: false
