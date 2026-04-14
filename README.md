@@ -130,7 +130,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 3. Symuluje godzina po godzinie: aktualna energia w baterii − zużycie + PV.
 4. Wyznacza minimalny `limit_soc` potrzebny do dotarcia do 13:00 bez zejścia poniżej `magazyn_soc_floor_percent` (20%).
 5. Jeśli prognoza PV < `var.magazyn_lowpv_threshold_rano_kwh` (domyślnie 8 kWh) → **tryb LOWPV**: ładuje do 100%.
-6. Jeśli jest planowany poranny eksport (spill) → może dodać bufor `spill_poranny`.
+6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_poranek` = ON → **ETAP 2**: doładowuje pod planowany eksport poranny (patrz niżej).
 
 **Modyfikatory zużycia:**
 - `calendar.urlop` aktywny w danej godzinie → z_h = `var.magazyn_konsumpcja_urlop_kwh_h` (domyślnie 0,5 kWh; priorytet nadrzędny)
@@ -151,7 +151,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 3. Symuluje SOC godzina po godzinie do 22:00.
 4. Wyznacza limit doładowania potrzebny do pokrycia zużycia wieczornego z zapasem.
 5. Jeśli prognoza skoryg. < `var.magazyn_lowpv_threshold_popoludnie_kwh` (domyślnie 8 kWh) **i** nie wystarcza na full + konsumpcję do 15:00 → **tryb LOWPV**: ładuje do 100%.
-6. Uwzględnia planowany eksport wieczorny i opcjonalne doładowanie pod eksport (`input_boolean.magazyn_doladowanie_pod_eksport_wieczor`).
+6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_wieczor` = ON → **ETAP 2**: doładowuje pod planowany eksport wieczorny (patrz niżej).
 
 Modyfikatory zużycia jak w oknie RANO.
 
@@ -190,6 +190,33 @@ Analogiczna logika jak eksport poranny, ale dla okna 15–22. Warunek cenowy: ce
 Automatyzacja POŁUDNIE (13–15) co uruchomienie oblicza **najlepsze sloty cenowe** na wieczór (15–22h) i ewentualnie planuje dodatkowe ładowanie z sieci (`export_topup`), żeby mieć wystarczający SOC do sprzedania zaplanowanej energii. Nawet w trybie LOWPV (cel = 100%) sloty są kalkulowane i wyświetlane w notyfikacji – bateria jest już pełna, więc `export_topup` jest pomijany.
 
 SOC stop eksportu wieczornego: `var.magazyn_soc_stop_export_wieczor` (domyślnie 20%).
+
+---
+
+## Doładowanie pod eksport (topup)
+
+Funkcja pozwala naładować baterię **więcej niż wymaga samo pokrycie zużycia**, tak aby nadwyżka pojemności mogła zostać sprzedana do sieci w korzystnych slotach RCE. Bateria pokrywa konsumpcję domu, a wyprodukowana energia PV (rano) lub zakupiona energia (wieczorem) idzie bezpośrednio do sieci.
+
+Włączana osobno dla każdego okna:
+
+| Flaga | Okno | Działanie |
+|---|---|---|
+| `input_boolean.magazyn_doladowanie_pod_eksport_poranek` | RANO (03–06) | Planuje sprzedaż z baterii w slotach 06–11 z ceną ≥ BAT semi / BAT full; doładowuje o brakującą energię |
+| `input_boolean.magazyn_doladowanie_pod_eksport_wieczor` | POŁUDNIE (13–15) | Planuje sprzedaż z baterii w slotach 15–22 z ceną ≥ próg; doładowuje o brakującą energię |
+
+**Algorytm (ETAP 2 w obu automatyzacjach):**
+
+1. Skanuje ceny RCE dla okna eksportu i wybiera sloty spełniające progi cenowe (BAT semi: `koszt_tańsza + min_zysk`; BAT full: `koszt_droższa + min_zysk`)
+2. Sumuje energię bateryjną potrzebną do realizacji planu (`export_plan_batt_sum`)
+3. Oblicza ile z tej energii już jest w baterii po podstawowym ładowaniu (`current_export_budget`)
+4. Różnicę (`export_missing`) dodaje do `grid_add` — bateria jest ładowana o tyle więcej z sieci
+5. Wynik planu (sloty, ceny, ilości) trafia do notyfikacji
+
+**Zabezpieczenia:**
+- Nie przekracza pojemności baterii (`max_ene_u`)
+- Respektuje `sensor.aktualny_limit_dzienny` — limit dobowy oddanej energii
+- W trybie LOWPV (cel = 100%) topup jest pomijany — bateria jest już pełna, sloty są liczone wyłącznie informacyjnie
+- `was_discharging` guard w domykaczu — topup nie koliduje z domykaczem godzinowym
 
 ---
 
