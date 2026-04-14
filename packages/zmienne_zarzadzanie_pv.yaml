@@ -118,9 +118,16 @@ var:
     restore: true
 
   # 3) PV / LOWPV / korekta prognozy (k)
-  magazyn_lowpv_threshold_kwh:
-    unique_id: "magazyn_lowpv_threshold_kwh"
-    friendly_name: "Magazyn: LOWPV próg (kWh) – wymuś FULL"
+  magazyn_lowpv_threshold_rano_kwh:
+    unique_id: "magazyn_lowpv_threshold_rano_kwh"
+    friendly_name: "Magazyn: LOWPV próg RANO (kWh) – wymuś FULL"
+    icon: "mdi:weather-cloudy"
+    initial_value: 8.0
+    restore: true
+
+  magazyn_lowpv_threshold_popoludnie_kwh:
+    unique_id: "magazyn_lowpv_threshold_popoludnie_kwh"
+    friendly_name: "Magazyn: LOWPV próg POPOŁUDNIE (kWh) – wymuś FULL"
     icon: "mdi:weather-cloudy"
     initial_value: 8.0
     restore: true

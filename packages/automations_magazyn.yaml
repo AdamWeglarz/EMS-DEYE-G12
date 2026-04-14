@@ -1199,7 +1199,8 @@ automation:
           {% endif %}
 
           {# ===== LOWPV ===== #}
-          {% set force_full = (pv_today_kwh > 0 and pv_today_kwh < 8.0) %}
+          {% set lowpv_threshold_rano = states('var.magazyn_lowpv_threshold_rano_kwh') | float(8.0) %}
+          {% set force_full = (pv_today_kwh > 0 and pv_today_kwh < lowpv_threshold_rano) %}
           {% if force_full and not urlop_any %}
             {% set cel = 100 %}
             {% set czy_ladowac = true %}
@@ -1504,7 +1505,7 @@ automation:
           Spill PV (od 06:00): {{ wyniki_pakiet.split('###')[6] }} kWh
 
           {% if wyniki_pakiet.split('###')[10] == 'YES' %}
-          ⚠️ TRYB AWARYJNY: prognoza PV dziś < 8kWh → wymuszam ładowanie do 100%
+          ⚠️ TRYB AWARYJNY: prognoza PV dziś < {{ states('var.magazyn_lowpv_threshold_rano_kwh') | float(8.0) }}kWh → wymuszam ładowanie do 100%
           {% endif %}
 
           Raport:
@@ -1835,7 +1836,8 @@ automation:
           {% set E_min_w_oknie = E15_base + ns.Smin_post %}
 
           {# ===== TRYB NISKIE PV ===== #}
-          {% set pv_low_base = (solcast_pozostalo > 0 and solcast_pozostalo < 8.0) %}
+          {% set lowpv_threshold_popoludnie = states('var.magazyn_lowpv_threshold_popoludnie_kwh') | float(8.0) %}
+          {% set pv_low_base = (solcast_pozostalo > 0 and solcast_pozostalo < lowpv_threshold_popoludnie) %}
           {% set pv_low = (pv_low_base and not pv_wystarczy_na_full_i_pre15) %}
 
           {# ===== BLOKADA SPILL ===== #}
@@ -1907,7 +1909,7 @@ automation:
           {% set export_reason = 'SKIP' %}
           {% set export_plan_lines = '' %}
 
-          {% if export_topup_enabled and cel < 100 and not blokada_spill %}
+          {% if export_topup_enabled and not blokada_spill %}
             {% set koszt_drozsza = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) %}
             {% set koszt_tansza = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0) %}
             {% set min_zysk_sprzedaz = states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0) %}
@@ -2065,7 +2067,9 @@ automation:
               {% set export_extra_u = [export_extra_u, (max_ene_u - E15_after_base)] | min %}
               {% if export_extra_u < 0 %}{% set export_extra_u = 0 %}{% endif %}
 
-              {% if export_extra_u > 0.01 %}
+              {% if cel >= 100 %}
+                {% set export_reason = 'SKIP_CEL_100' %}
+              {% elif export_extra_u > 0.01 %}
                 {% set grid_add_u = grid_add_u + export_extra_u %}
                 {% if grid_add_u > (max_ene_u - E15_base) %}
                   {% set grid_add_u = (max_ene_u - E15_base) %}
@@ -2086,8 +2090,6 @@ automation:
           {% else %}
             {% if not export_topup_enabled %}
               {% set export_reason = 'FEATURE_OFF' %}
-            {% elif cel >= 100 %}
-              {% set export_reason = 'SKIP_CEL_100' %}
             {% elif blokada_spill %}
               {% set export_reason = 'SKIP_SPILL' %}
             {% else %}
@@ -2280,7 +2282,7 @@ automation:
           {% if wyniki_pakiet.split('###')[21] == 'YES' %}
           🚫 BLOKADA: Wykryto nadmiar PV (spill > 0) → ładowanie z sieci zablokowane
           {% elif wyniki_pakiet.split('###')[17] == 'LOWPV' %}
-          ⚠️ TRYB AWARYJNY LOWPV: forecast skorygowany < 8kWh i nie wystarcza na full + konsumpcję do 15:00 → wymuszam ładowanie do 100%
+          ⚠️ TRYB AWARYJNY LOWPV: forecast skorygowany < {{ states('var.magazyn_lowpv_threshold_popoludnie_kwh') | float(8.0) }}kWh i nie wystarcza na full + konsumpcję do 15:00 → wymuszam ładowanie do 100%
           {% elif wyniki_pakiet.split('###')[17] == 'BATTERY_OK' %}
           ✅ Bateria wystarczy do 22:00 bez doładowania
           {% elif wyniki_pakiet.split('###')[17] == 'NORMAL' or '+EXPORT' in wyniki_pakiet.split('###')[17] %}
