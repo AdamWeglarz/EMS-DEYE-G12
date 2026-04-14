@@ -40,7 +40,6 @@ System integruje się z kalendarzami Home Assistant i dostosowuje planowane zuż
 System śledzi ekonomikę instalacji w czasie rzeczywistym metodą **Actual vs Counterfactual** — ile zaoszczędzono w porównaniu do scenariusza bez PV i magazynu:
 - **Dzienny**: koszt importu, przychód eksportu, oszczędność G12 i G11, zysk ze sprzedaży po odjęciu kosztu ładowania pod eksport
 - **Skumulowany od początku instalacji**: całkowita oszczędność z uwzględnieniem offsetu historycznego (przed uruchomieniem systemu)
-- Obsługa ujemnych cen RCE
 
 ---
 
@@ -52,7 +51,7 @@ System śledzi ekonomikę instalacji w czasie rzeczywistym metodą **Actual vs C
 | Magazyn energii | Bateria podłączona do falownika Deye, pojemność skonfigurowana w `var.magazyn_pojemnosc_brutto_kwh` (domyślnie 15 kWh) |
 | Prognoza PV | Solcast (integracja HA) z modelem `detailedHourly` |
 | Prognoza pogody | Pirate Weather (`weather.pirateweather`) – warunki pogodowe do korekty minimalnego SOC rano |
-| Ceny energii | Sensor `sensor.rce_prices_today_scaled` / `tomorrow_scaled` – ceny RCE z VAT (PLN/kWh); ceny TGE RDN dostępne poglądowo |
+| Ceny energii | Sensor `sensor.rce_prices_today_scaled` / `tomorrow_scaled` – ceny RCE z VAT (PLN/kWh); ceny ujemne zerowane po stronie sprzedaży (wymóg prosumencki) |
 | Taryfa OSD | **G12** – strefa droższa i tańsza (22:00–06:00 + 13:00–15:00) |
 | Baza danych | MariaDB (MySQL) – wymagana do zapytań SQL po historii zużycia |
 | Kalendarz HA | `calendar.urlop` i `calendar.sprzatanie` – opcjonalne, modyfikują planowanie |
@@ -210,7 +209,7 @@ Oszczędność = Koszt_G12_bez_PV − (Koszt_importu − Przychód_eksportu)
 - Akumulatory dzienne resetują się o 23:59
 - Skumulowany zysk całkowity ze sprzedaży z odliczeniem kosztu ładowania pod eksport
 - Offset startowy wpisany ręcznie (oszczędność przed uruchomieniem systemu)
-- Obsługa ujemnych cen RCE (bez limitu na 0 PLN)
+- Ceny RCE sprzedaży zerowane przy wartościach ujemnych (zgodnie z zasadami rozliczenia prosumenckiego)
 
 ---
 
@@ -259,7 +258,7 @@ Otwarte zadania z Asany:
 
 ## Znane ograniczenia
 
-- **Tylko taryfa G12** – logika stref cenowych (droższa/tańsza) jest zakodowana pod G12. Taryfa G11, G12W ani dynamiczna nie są obsługiwane bez modyfikacji.
+- **Tylko taryfa G12** – logika stref cenowych (droższa/tańsza) jest zakodowana pod G12. Taryfa G11 ani G12W nie są obsługiwane bez modyfikacji. Ceny TGE RDN są dostępne w systemie wyłącznie poglądowo (dotyczą zakupu w taryfach dynamicznych, z których nie korzystamy).
 - **Tylko falownik Deye/Solarman** – sterowanie przez encje `select.solarman_program_*`, `number.solarman_*`, `switch.solarman_battery_grid_charging`. Inne falowniki wymagają przeróbki całej warstwy sterującej.
 - **Wymaga MariaDB** – zapytania SQL po historii zużycia działają wyłącznie z MySQL/MariaDB. SQLite (domyślna baza HA) nie obsługuje wymaganych funkcji (`CONVERT_TZ`, `DECIMAL`).
 - **Prognoza Solcast** – system zależy od jakości prognozy. Przy dużych odchyłach (zachmurzenie) działa tryb LOWPV jako zabezpieczenie.
