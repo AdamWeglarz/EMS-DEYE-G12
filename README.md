@@ -205,6 +205,19 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 
 ---
 
+## Backlog / TODO
+
+Otwarte zadania z Asany:
+
+| Zadanie | Opis |
+|---|---|
+| **Migracja prognozy PV na detailedForecast** | Przejście z `detailedHourly` na `detailedForecast` (półgodzinny) w Solcast – dokładniejsze dane PV per slot. Zależne od migracji konsumpcji. |
+| **Migracja planowania na sloty 30-min (konsumpcja)** | Pętle planowania (`range(h)`) w RANO, POŁUDNIE i eksportach przejdą na sloty `0..47`. SQL queries: `GROUP BY slot = HOUR*2 + FLOOR(MINUTE/30)`. |
+| **Definicja struktury danych – SQL sprzedaży 15-min** | Zapytanie SQL liczące oddaną energię w slotach 15-minutowych na bazie `sensor.solarman_total_energy_sold_safe`. |
+| **System raportowy ładowania/rozładowania** | Raport dzienny/miesięczny cykli ładowania i rozładowania baterii. |
+
+---
+
 ## Znane ograniczenia
 
 - **Tylko taryfa G12** – logika stref cenowych (droższa/tańsza) jest zakodowana pod G12. Taryfa G11, G12W ani dynamiczna nie są obsługiwane bez modyfikacji.
