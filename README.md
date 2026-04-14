@@ -4,6 +4,46 @@ System zarządzania energią oparty na Home Assistant, sterujący ładowaniem i 
 
 ---
 
+## Funkcjonalności
+
+### Ładowanie magazynu w taniej strefie G12
+System automatycznie ładuje baterię z sieci w oknie taniej taryfy G12 (22:00–06:00 oraz 13:00–15:00). Ilość ładowanej energii nie jest stała — system wyznacza dokładnie tyle, ile potrzeba, na podstawie prognozy PV i historycznego zużycia, żeby o godzinie 13:00 bateria osiągnęła zaplanowany poziom SOC. Nie ładuje więcej niż potrzeba — nadmiar i tak wytworzy PV. Przy słabej prognozie (< 8 kWh) automatycznie przełącza się w tryb FULL i ładuje do 100%.
+
+### Unikanie spillu PV
+System prognozuje, ile energii wyprodukuje PV w danym dniu i ile z tego nie zmieści się do baterii ani nie zostanie skonsumowane. Ten nadmiar (spill) jest planowany z wyprzedzeniem — system decyduje, czy go oddać do sieci, a jeśli tak, to w jakim trybie. Nie oddaje energii na ślepo — zawsze sprawdza, czy cena RCE pokrywa koszty i czy nie zaszkodzi to bilansowi godzinowemu.
+
+### Sprzedaż energii w korzystnych cenach — rano (06:00–13:00)
+W oknie porannym system co 15 minut analizuje aktualną cenę RCE i decyduje o trybie eksportu:
+- **PV spill** — oddaje tylko nadwyżkę PV, gdy cena > minimalny próg zysku
+- **BAT spill** — angażuje baterię do poziomu realnego spillu, gdy cena jest wystarczająca
+- **BAT semi** — sprzedaje z baterii bez limitu spillu, zachowując min. 50% SOC na godzinę 13:00
+- **BAT full** — maksymalny eksport do technicznego minimum SOC, tylko przy najwyższych cenach
+
+### Sprzedaż energii w korzystnych cenach — wieczorem (15:00–22:00)
+Analogiczny mechanizm do porannego, działający w oknie wieczornym (taryfa droższa). System pilnuje, żeby nie zejść poniżej skonfigurowanego minimum SOC na noc (`magazyn_soc_stop_export_wieczor`). O 22:00 blokuje eksport i planuje całą noc do następnego południa.
+
+### Zgodność z wymaganiami OSD — bilansowanie godzinowe
+System respektuje godzinowe bilansowanie prosumenckie: przed każdą decyzją o eksporcie wylicza przewidywane zużycie do końca bieżącej godziny i rezerwuje odpowiednią energię w baterii. Nie oddaje energii, którą będzie musiał odkupić w tej samej godzinie rozliczeniowej. Snapshoty liczników importu i eksportu zapisywane są na starcie każdej godziny.
+
+### Korekta planowania wg pogody
+Na podstawie prognozy Pirate Weather system co rano (05:29) koryguje minimalny wymagany SOC:
+- Słonecznie → niższy floor SOC (PV wyprodukuje dużo, nie trzeba trzymać rezerwy)
+- Lekkie zachmurzenie → środkowy floor
+- Mocne zachmurzenie → wyższy floor (zabezpieczenie na wypadek słabej produkcji)
+
+### Planowanie urlopu i sprzątania
+System integruje się z kalendarzami Home Assistant i dostosowuje planowane zużycie:
+- **Urlop** (`calendar.urlop`) — zużycie = 0,5 kWh/h; system nie ładuje baterii na zapas, bo dom i tak mało pobiera
+- **Sprzątanie** (`calendar.sprzatanie`) — zużycie = SQL × 2,0; system planuje większy bufor energetyczny na godziny ze sprzątaniem
+
+### Raporty finansowe
+System śledzi ekonomikę instalacji w czasie rzeczywistym metodą **Actual vs Counterfactual** — ile zaoszczędzono w porównaniu do scenariusza bez PV i magazynu:
+- **Dzienny**: koszt importu, przychód eksportu, oszczędność G12 i G11, zysk ze sprzedaży po odjęciu kosztu ładowania pod eksport
+- **Skumulowany od początku instalacji**: całkowita oszczędność z uwzględnieniem offsetu historycznego (przed uruchomieniem systemu)
+- Obsługa ujemnych cen RCE
+
+---
+
 ## Wymagania sprzętowe i taryfowe
 
 | Element | Wymaganie |
