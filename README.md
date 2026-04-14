@@ -1,6 +1,6 @@
 # EMS – Energy Management System
 
-System zarządzania energią oparty na Home Assistant, sterujący ładowaniem i rozładowaniem magazynu energii oraz sprzedażą energii do sieci w oparciu o prognozę PV, historyczne zużycie i ceny rynkowe RCE (TGE RDN).
+System zarządzania energią oparty na Home Assistant, sterujący ładowaniem i rozładowaniem magazynu energii oraz sprzedażą energii do sieci w oparciu o prognozę PV, historyczne zużycie i ceny RCE (Rynkowa Cena Energii).
 
 ---
 
@@ -12,7 +12,7 @@ System zarządzania energią oparty na Home Assistant, sterujący ładowaniem i 
 | Magazyn energii | Bateria podłączona do falownika Deye, pojemność skonfigurowana w `var.magazyn_pojemnosc_brutto_kwh` (domyślnie 15 kWh) |
 | Prognoza PV | Solcast (integracja HA) z modelem `detailedHourly` |
 | Prognoza pogody | Pirate Weather (`weather.pirateweather`) – warunki pogodowe do korekty minimalnego SOC rano |
-| Ceny energii | Sensor `sensor.rce_prices_today_scaled` / `tomorrow_scaled` – ceny RDN TGE z VAT (PLN/kWh) |
+| Ceny energii | Sensor `sensor.rce_prices_today_scaled` / `tomorrow_scaled` – ceny RCE z VAT (PLN/kWh); ceny TGE RDN dostępne poglądowo |
 | Taryfa OSD | **G12** – strefa droższa i tańsza (22:00–06:00 + 13:00–15:00) |
 | Baza danych | MariaDB (MySQL) – wymagana do zapytań SQL po historii zużycia |
 | Kalendarz HA | `calendar.urlop` i `calendar.sprzatanie` – opcjonalne, modyfikują planowanie |
