@@ -446,7 +446,7 @@ automation:
                 + zysk_sprzedazy) | round(4) }}
 
       # Wyślij podsumowanie
-      - service: notify.persistent_notification
+      - service: script.ems_notify
         data:
           title: "💰 Finanse PV – podsumowanie dnia {{ now().strftime('%d.%m.%Y') }}"
           message: >

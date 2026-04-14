@@ -1452,7 +1452,7 @@ automation:
               target:
                 entity_id: input_boolean.battery_charge_from_grid
 
-    - service: notify.persistent_notification
+    - service: script.ems_notify
       data:
         title: "RANO 06-13 | GRID: {{ wyniki_pakiet.split('###')[8] }} | TRYB: {{ wyniki_pakiet.split('###')[26] }}"
         message: |-
@@ -2206,7 +2206,7 @@ automation:
               target:
                 entity_id: input_boolean.battery_charge_from_grid
 
-    - service: notify.persistent_notification
+    - service: script.ems_notify
       data:
         title: "POPOŁUDNIE 13-22 | GRID: {{ wyniki_pakiet.split('###')[13] }} | TRYB: {{ wyniki_pakiet.split('###')[17] }}"
         message: |-
@@ -2322,7 +2322,7 @@ automation:
       data:
         value: 20
 
-    - service: notify.persistent_notification
+    - service: script.ems_notify
       data:
         title: "⏹️ STOP ładowania popołudniowego z sieci"
         message: >

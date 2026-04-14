@@ -3,6 +3,25 @@
 # Wersja: uproszczona, spójna, testowa
 ###############################################################################
 
+input_boolean:
+  ems_powiadomienia:
+    name: "EMS: Powiadomienia"
+    icon: mdi:bell
+
+script:
+  ems_notify:
+    alias: "EMS: Wyślij powiadomienie (z filtrem)"
+    mode: parallel
+    max: 10
+    sequence:
+      - condition: state
+        entity_id: input_boolean.ems_powiadomienia
+        state: "on"
+      - service: notify.persistent_notification
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+
 var:
   przeniesionaenergia:
     friendly_name: "Przeniesiona energia"

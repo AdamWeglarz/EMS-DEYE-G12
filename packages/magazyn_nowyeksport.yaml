@@ -845,7 +845,7 @@ automation:
             pv_surplus_min_w: "{{ pv_surplus_min_w }}"
             pv_surplus_5m_ok: "{{ pv_surplus_5m_ok }}"
 
-      - service: notify.persistent_notification
+      - service: script.ems_notify
         data:
           title: "📊 Plan porannego eksportu"
           message: >
@@ -958,7 +958,7 @@ automation:
               - service: input_boolean.turn_off
                 target:
                   entity_id: input_boolean.battery_discharge_to_grid
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "⚠️ STOP eksportu - brak danych PV"
                   message: >
@@ -1009,7 +1009,7 @@ automation:
                               - condition: template
                                 value_template: "{{ not was_battery_discharging }}"
                             sequence:
-                              - service: notify.persistent_notification
+                              - service: script.ems_notify
                                 data:
                                   title: "🚀 START eksportu z magazynu"
                                   message: >
@@ -1037,7 +1037,7 @@ automation:
                           - condition: template
                             value_template: "{{ was_battery_discharging or not was_pv_discharging }}"
                         sequence:
-                          - service: notify.persistent_notification
+                          - service: script.ems_notify
                             data:
                               title: "🔄 Tryb PV-only"
                               message: >
@@ -1066,7 +1066,7 @@ automation:
               - condition: template
                 value_template: "{{ now_hm == '13:00' }}"
             sequence:
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "📈 Podsumowanie porannego eksportu"
                   message: >
@@ -1156,7 +1156,7 @@ automation:
               - service: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.pv_discharge_to_grid
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "🛡️ Strażnik SOC: twardy stop BAT"
                   message: >
@@ -1179,7 +1179,7 @@ automation:
               - service: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.pv_discharge_to_grid
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "🛡️ Strażnik SOC: stop BAT na buforze"
                   message: >
@@ -1236,7 +1236,7 @@ automation:
               - service: input_boolean.turn_off
                 target:
                   entity_id: input_boolean.pv_discharge_to_grid
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "⏹️ STOP eksportu PV - brak nadwyżki 5 min"
                   message: >
@@ -1859,7 +1859,7 @@ automation:
                 # value_template: "{{ t_now == '15:00' }}"
                 value_template: "{{ true }}"
             sequence:
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "📊 Plan eksportu wieczornego"
                   message: >
@@ -1902,7 +1902,7 @@ automation:
                       - condition: template
                         value_template: "{{ was_discharging }}"
                     sequence:
-                      - service: notify.persistent_notification
+                      - service: script.ems_notify
                         data:
                           title: "⏸️ STOP eksportu - poza planem"
                           message: >
@@ -1928,7 +1928,7 @@ automation:
                       - condition: template
                         value_template: "{{ was_discharging }}"
                     sequence:
-                      - service: notify.persistent_notification
+                      - service: script.ems_notify
                         data:
                           title: "⚠️ STOP eksportu - osiągnięto SOC stop"
                           message: >
@@ -1949,7 +1949,7 @@ automation:
                       - condition: template
                         value_template: "{{ not was_discharging }}"
                     sequence:
-                      - service: notify.persistent_notification
+                      - service: script.ems_notify
                         data:
                           title: "🚀 START eksportu wieczornego"
                           message: >
@@ -1973,7 +1973,7 @@ automation:
               - condition: template
                 value_template: "{{ t_now == '21:45' }}"
             sequence:
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "📈 Podsumowanie eksportu wieczornego"
                   message: >
@@ -2494,7 +2494,7 @@ automation:
                   entity_id:
                     - input_boolean.pv_discharge_to_grid
   
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "🌙 NOC v3.11: Brak blokady"
                   message: >
@@ -2518,7 +2518,7 @@ automation:
                 target:
                   entity_id: input_boolean.battery_charge_from_grid
   
-              - service: notify.persistent_notification
+              - service: script.ems_notify
                 data:
                   title: "🌙 NOC v3.11: Booking magazynu na jutro"
                   message: >
@@ -2660,7 +2660,7 @@ automation:
             {%- elif e_available_kwh <= 0.05 %}soc_floor
             {%- else %}OK{%- endif %}
 
-      - service: notify.persistent_notification
+      - service: script.ems_notify
         data:
           title: "Domykacz {{ h_now }}:45 | {{ skip_reason }}"
           message: >-
