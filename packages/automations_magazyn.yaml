@@ -954,9 +954,10 @@ automation:
     - variables:
         wyniki_pakiet: >-
           {% set soc_akt = states('sensor.solarman_battery_safe') | float(25) %}
-          {% set pojemnosc_kwh = 15.0 %}
-          {% set prog_min_kwh = 3.0 %}
-          {% set zapas_kwh = 0.75 %}
+          {% set pojemnosc_kwh = states('var.magazyn_pojemnosc_brutto_kwh') | float(15) %}
+          {% set soc_floor_pct_base = states('var.magazyn_soc_floor_percent') | float(20) %}
+          {% set prog_min_kwh = pojemnosc_kwh * soc_floor_pct_base / 100 %}
+          {% set zapas_kwh = states('var.magazyn_zapas_kwh') | float(0.75) %}
           {% set soc_min_rano = states('var.magazyn_soc_min_rano_percent') | float(25) %}
 
           {# ===== URLOP: lista godzin (YYYY-MM-DD HH) dla dzisiejszego planu ===== #}
@@ -1060,6 +1061,11 @@ automation:
             raport=""
           ) %}
 
+          {% set cons_mult = states('var.magazyn_konsumpcja_multiplier') | float(1.15) %}
+          {% set cons_default = states('var.magazyn_konsumpcja_default_kwh_h') | float(1.5) %}
+          {% set urlop_kwh_h = states('var.magazyn_konsumpcja_urlop_kwh_h') | float(0.5) %}
+          {% set sprzatanie_mult = states('var.magazyn_konsumpcja_mult_sprzatanie') | float(2.0) %}
+
           {% set ns.raport = "G:START | E_u:" ~ E0_u|round(2) ~ "kWh | SOC:" ~ soc_akt|round(1) ~ "% | CEL13:" ~ target_soc_13|round(0) ~ "% | TZ:" ~ now().strftime('%z') %}
           {% set ns.raport = ns.raport ~ "\nPV_today_kWh:" ~ pv_today_kwh|round(2) %}
           {% set ns.raport = ns.raport ~ "\nSQL rows:" ~ (rows|length) ~ " | dict_z:" ~ dict_z %}
@@ -1071,7 +1077,7 @@ automation:
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}
@@ -1603,9 +1609,10 @@ automation:
     - variables:
         wyniki_pakiet: >-
           {% set soc_akt = states('sensor.solarman_battery_safe') | float(25) %}
-          {% set pojemnosc_kwh = 15.0 %}
-          {% set prog_min_kwh = 3.0 %}
-          {% set zapas_kwh = 0.75 %}
+          {% set pojemnosc_kwh = states('var.magazyn_pojemnosc_brutto_kwh') | float(15) %}
+          {% set soc_floor_pct_base = states('var.magazyn_soc_floor_percent') | float(20) %}
+          {% set prog_min_kwh = pojemnosc_kwh * soc_floor_pct_base / 100 %}
+          {% set zapas_kwh = states('var.magazyn_zapas_kwh') | float(0.75) %}
 
           {# ===== URLOP: lista godzin (YYYY-MM-DD HH) dla dzisiejszego planu ===== #}
           {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
@@ -1677,13 +1684,18 @@ automation:
           {% endfor %}
           {% set dict_z = nsd.d %}
 
+          {% set cons_mult = states('var.magazyn_konsumpcja_multiplier') | float(1.15) %}
+          {% set cons_default = states('var.magazyn_konsumpcja_default_kwh_h') | float(1.5) %}
+          {% set urlop_kwh_h = states('var.magazyn_konsumpcja_urlop_kwh_h') | float(0.5) %}
+          {% set sprzatanie_mult = states('var.magazyn_konsumpcja_mult_sprzatanie') | float(2.0) %}
+
           {# ===== Konsumpcja od TERAZ do 15:00 ===== #}
           {% set ns_pre15 = namespace(cons=0.0, txt="") %}
           {% for h in range(13, 15) %}
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
 
             {% if h < current_hour %}
               {% set frac = 0 %}
@@ -1735,7 +1747,7 @@ automation:
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}
@@ -1906,6 +1918,8 @@ automation:
             {% set max_moc_rozladowania_kw = states('var.magazyn_max_moc_rozladowania_kw') | float(6) %}
             {% set cons_mult = states('var.magazyn_konsumpcja_multiplier') | float(1.15) %}
             {% set cons_default = states('var.magazyn_konsumpcja_default_kwh_h') | float(1.5) %}
+            {% set urlop_kwh_h = states('var.magazyn_konsumpcja_urlop_kwh_h') | float(0.5) %}
+            {% set sprzatanie_mult = states('var.magazyn_konsumpcja_mult_sprzatanie') | float(2.0) %}
             {% set ceny_data = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
 
             {% set floor_kwh_evening = pojemnosc_kwh * soc_floor_pct / 100 %}
@@ -1921,7 +1935,7 @@ automation:
               {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z[h|string] | default(cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
+              {% set z_h = (dict_z[h|string] | default(cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
               {% set ns_cons15.total = ns_cons15.total + z_h %}
             {% endfor %}
             {% set cons_15_22 = ns_cons15.total %}
@@ -1966,7 +1980,7 @@ automation:
                       {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
                       {% set is_urlop_h = hk in urlop_hours %}
                       {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-                      {% set z_h = (dict_z[h|string] | default(cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
+                      {% set z_h = (dict_z[h|string] | default(cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
                       {% set base_delta_slot = (pv_h - z_h) / 4 %}
                       {% if price_kwh >= prog_pelny %}
                         {% set ns_slots.full = ns_slots.full + [{
@@ -2102,7 +2116,7 @@ automation:
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}

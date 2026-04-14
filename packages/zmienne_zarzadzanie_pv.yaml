@@ -4,17 +4,47 @@
 ###############################################################################
 
 input_boolean:
+  # Sterowanie trybami inwertera
+  battery_discharge_to_grid:
+    name: Oddaj energię z magazynu do sieci
+    icon: mdi:transmission-tower-export
+
+  pv_discharge_to_grid:
+    name: Oddaj energię z PV do sieci
+    icon: mdi:transmission-tower-export
+
+  battery_charge_from_grid:
+    name: Ładuj akumulator z sieci
+    icon: mdi:transmission-tower-import
+
   magazyn_doladowanie_pod_eksport_wieczor:
     name: Magazyn - doładowanie pod eksport wieczorny
     icon: mdi:battery-arrow-up-outline
-    initial: false
 
   magazyn_doladowanie_pod_eksport_poranek:
     name: Magazyn - doładowanie pod eksport poranny
     icon: mdi:battery-arrow-up-outline
-    initial: false
+
+
+input_number:
+  manual_battery_charge_limit:
+    name: "Manualny Limit Ładowania Baterii"
+    min: 20
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:battery-arrow-up
 
 var:
+
+  spill_poranny:
+    initial_value: 0
+    restore: true
+    unit_of_measurement: "kWh"
+    friendly_name: "Spill poranny"
+    icon: "mdi:battery-arrow-up"
+    unique_id: "spill_poranny"
 
   # 1) Bateria i SOC (model + sterowanie)
   magazyn_pojemnosc_brutto_kwh:
@@ -54,7 +84,7 @@ var:
 
   magazyn_soc_min_rano_percent:
     unique_id: "magazyn_soc_min_rano_percent"
-    friendly_name: "Magazyn: Min bezpieczne SOC rano (do 11:00) (%)"
+    friendly_name: "Magazyn: Min bezpieczne SOC rano (do 13:00) (%)"
     icon: "mdi:battery-alert-variant"
     initial_value: 25
 
@@ -320,9 +350,52 @@ var:
     unit_of_measurement: "%"
     icon: mdi:battery-stop
 
+  magazyn_soc_spill_bat_floor_percent:
+    unique_id: "magazyn_soc_spill_bat_floor_percent"
+    friendly_name: "Magazyn: SOC floor dla BAT spill (min SOC przy eksporcie BAT)"
+    icon: "mdi:battery-arrow-down-outline"
+    initial_value: 30
+    restore: true
+
+  magazyn_soc_buffer_mid_percent:
+    unique_id: "magazyn_soc_buffer_mid_percent"
+    friendly_name: "Magazyn: bufor SOC mid-day (dodawany do min_dynamic_13 przy planowaniu nocnym)"
+    icon: "mdi:battery-plus-outline"
+    initial_value: 5
+    restore: true
+
+  magazyn_konsumpcja_urlop_kwh_h:
+    unique_id: "magazyn_konsumpcja_urlop_kwh_h"
+    friendly_name: "Magazyn: stałe zużycie podczas urlopu (kWh/h)"
+    icon: "mdi:beach"
+    initial_value: 0.5
+    restore: true
+
+  magazyn_konsumpcja_mult_sprzatanie:
+    unique_id: "magazyn_konsumpcja_mult_sprzatanie"
+    friendly_name: "Magazyn: mnożnik zużycia podczas sprzątania"
+    icon: "mdi:robot-vacuum"
+    initial_value: 2.0
+    restore: true
+
   cel_naladowania_o_13:
     friendly_name: "Cel naładowania o 13"
     unique_id: cel_naladowania_o_13
     initial_value: 50
     icon: mdi:battery-clock
     unit_of_measurement: "%"
+
+  # --- Bilansowanie godzinowe (zadanie 2/2): snapshoty licznikow na start HH:00 ---
+  magazyn_import_snapshot_hh00:
+    unique_id: magazyn_import_snapshot_hh00
+    friendly_name: "Magazyn: snapshot importu na start biezacej godziny"
+    icon: mdi:transmission-tower
+    initial_value: 0
+    restore: true
+
+  magazyn_eksport_snapshot_hh00:
+    unique_id: magazyn_eksport_snapshot_hh00
+    friendly_name: "Magazyn: snapshot eksportu na start biezacej godziny"
+    icon: mdi:transmission-tower-export
+    initial_value: 0
+    restore: true
