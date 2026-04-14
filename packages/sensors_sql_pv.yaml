@@ -39,3 +39,74 @@ sql:
         AND st.start_ts <  UNIX_TIMESTAMP(CONCAT(DATE(NOW()), ' 22:00:00'));
     column: "value"
     unit_of_measurement: "kWh"
+
+  - name: "Srednie zuzycie o obecnej godzinie"
+    unique_id: "sql_avg_usage_current_hour"
+    query: >
+      SELECT AVG(corrected_diff) AS value
+      FROM (
+        SELECT
+          CASE
+            WHEN diff < 0 OR diff > 20 THEN default_kwh
+            ELSE diff
+          END AS corrected_diff
+        FROM (
+          SELECT
+            (MAX(CAST(s.state AS DECIMAL(10,3))) - MIN(CAST(s.state AS DECIMAL(10,3)))) AS diff,
+            (
+              SELECT CAST(v.state AS DECIMAL(10,3))
+              FROM states v
+              JOIN states_meta vm ON v.metadata_id = vm.metadata_id
+              WHERE vm.entity_id = 'var.magazyn_konsumpcja_default_kwh_h'
+                AND v.state NOT IN ('unknown', 'unavailable', '')
+              ORDER BY v.last_updated_ts DESC
+              LIMIT 1
+            ) AS default_kwh
+          FROM states s
+          JOIN states_meta m ON s.metadata_id = m.metadata_id
+          WHERE m.entity_id = 'sensor.solarman_total_load_consumption'
+            AND s.state NOT IN ('unknown', 'unavailable', '')
+            AND HOUR(FROM_UNIXTIME(s.last_updated_ts)) = HOUR(NOW())
+            AND DATE(FROM_UNIXTIME(s.last_updated_ts)) < CURDATE()
+            AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 2592000)
+          GROUP BY DATE(FROM_UNIXTIME(s.last_updated_ts))
+        ) AS daily
+      ) AS subquery;
+    column: "value"
+    unit_of_measurement: "kWh"
+
+  - name: "Srednie zuzycie w obecnym slocie 30min"
+    unique_id: "sql_avg_usage_current_slot_30min"
+    query: >
+      SELECT AVG(corrected_diff) AS value
+      FROM (
+        SELECT
+          CASE
+            WHEN diff < 0 OR diff > 10 THEN default_kwh
+            ELSE diff
+          END AS corrected_diff
+        FROM (
+          SELECT
+            (MAX(CAST(s.state AS DECIMAL(10,3))) - MIN(CAST(s.state AS DECIMAL(10,3)))) AS diff,
+            (
+              SELECT CAST(v.state AS DECIMAL(10,3)) / 2
+              FROM states v
+              JOIN states_meta vm ON v.metadata_id = vm.metadata_id
+              WHERE vm.entity_id = 'var.magazyn_konsumpcja_default_kwh_h'
+                AND v.state NOT IN ('unknown', 'unavailable', '')
+              ORDER BY v.last_updated_ts DESC
+              LIMIT 1
+            ) AS default_kwh
+          FROM states s
+          JOIN states_meta m ON s.metadata_id = m.metadata_id
+          WHERE m.entity_id = 'sensor.solarman_total_load_consumption'
+            AND s.state NOT IN ('unknown', 'unavailable', '')
+            AND HOUR(FROM_UNIXTIME(s.last_updated_ts)) = HOUR(NOW())
+            AND FLOOR(MINUTE(FROM_UNIXTIME(s.last_updated_ts)) / 30) = FLOOR(MINUTE(NOW()) / 30)
+            AND DATE(FROM_UNIXTIME(s.last_updated_ts)) < CURDATE()
+            AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 2592000)
+          GROUP BY DATE(FROM_UNIXTIME(s.last_updated_ts))
+        ) AS daily
+      ) AS subquery;
+    column: "value"
+    unit_of_measurement: "kWh"
