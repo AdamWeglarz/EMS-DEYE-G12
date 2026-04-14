@@ -417,15 +417,6 @@ template:
         availability: true
 sensor:
   - platform: statistics
-    name: Średnia moc zużycia domu z 1h
-    unique_id: srednia_moc_zuzycia_domu_1h
-    entity_id: sensor.moc_pobierana_przez_dom_straty
-    max_age:
-      hours: 1
-    state_characteristic: average_linear
-    sampling_size: 1200
-
-  - platform: statistics
     name: Średnia moc z PV 5 minut
     unique_id: srednia_moc_PV_5_minut
     entity_id: sensor.solaredge_ac_power
