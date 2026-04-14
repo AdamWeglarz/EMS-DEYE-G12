@@ -230,6 +230,8 @@ O 22:00 system planuje całą noc JUTRO (22:00 → 13:00 następnego dnia):
 - Wyznacza czy bieżący SOC wystarczy do 13:00 bez dołowania poniżej `magazyn_soc_blokada_noc_min_percent`
 - Jeśli nie – zatrzymuje eksport i przełącza falownik w tryb normalny (Zero Export To CT)
 
+**Blokada rozładowania nocnego:** jeśli plan RANO zakłada ładowanie baterii z sieci (tania strefa G12 22:00–06:00), system pilnuje żeby baterii **nie rozładowywać w nocy** — rozładowanie a potem ponowne naładowanie z sieci to strata na sprawności round-trip (~7%). Plan nocny rezerwuje energię potrzebną do dotarcia do rana i blokuje eksport poniżej tego poziomu (`magazyn_soc_blokada_noc_min_percent`).
+
 ---
 
 ## Bilansowanie godzinowe (wymóg prawny)
