@@ -1756,8 +1756,7 @@ automation:
               {% endif %}
             {% endfor %}
   
-            {% set E_required_base = E_required_partial if nsCur.mode != 'full' else 0 %}
-            {% set soc_stop_target = (((E_required_base + nsCur.batt_use + floor_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
+            {% set soc_stop_target = (((E0_u - nsCur.batt_use + floor_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
             {% if nsCur.mode == 'full' %}
               {% set soc_stop_target = (((floor_kwh + reserve_do_konca_godziny_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
             {% endif %}
