@@ -288,7 +288,7 @@ automation:
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
               {% set pv_h = pv_d.get(h, 0) %}
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set z_eff = z_h * factor %}
@@ -303,7 +303,7 @@ automation:
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
               {% set pv_h = pv_d.get(h, 0) %}
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set z_eff = z_h * factor %}
@@ -392,7 +392,7 @@ automation:
                         {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsFullCand.list = nsFullCand.list + [{
@@ -464,7 +464,7 @@ automation:
                         {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsSemiCand.list = nsSemiCand.list + [{
@@ -536,7 +536,7 @@ automation:
                         {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsSpillCand.list = nsSpillCand.list + [{
@@ -636,7 +636,8 @@ automation:
                 {% set cur_h = now().hour %}
                 {% set cur_hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(cur_h) %}
                 {% set cur_is_urlop = cur_hk in urlop_hours %}
-                {% set nsCur.hour_cons = 0.5 if cur_is_urlop else ((dict_z.get(cur_h, cons_default)) * cons_mult) %}
+                {% set cur_is_sprzatanie = cur_hk in sprzatanie_hours %}
+                {% set nsCur.hour_cons = (dict_z.get(cur_h, cons_default)) * 2.0 if cur_is_sprzatanie else (0.5 if cur_is_urlop else ((dict_z.get(cur_h, cons_default)) * cons_mult)) %}
                 {% set nsCur.hour_pv = (pv_d.get(cur_h, 0)) %}
               {% endif %}
             {% endfor %}
@@ -675,7 +676,7 @@ automation:
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
               {% set pv_h = pv_d.get(h, 0) %}
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set z_eff = z_h * factor %}
@@ -1547,7 +1548,7 @@ automation:
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
               {% set factor = current_hour_factor if h == h_now else 1 %}
               {% set ns_cons.total = ns_cons.total + (z_h * factor) %}
             {% endfor %}
@@ -1623,7 +1624,7 @@ automation:
                       {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
                       {% set base_delta_slot = (pv_h - z_h) / 4 %}
                       {% if price_kwh >= prog_pelny %}
                         {% set ns.full = ns.full + [{
@@ -2215,7 +2216,7 @@ automation:
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
               {% set ns_cons.total = ns_cons.total + z_h %}
             {% endfor %}
             {% set total_cons_6_13 = ns_cons.total %}
@@ -2251,7 +2252,7 @@ automation:
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
               {% set net_h = pv_h - z_h %}
               {% set batt_before = nsSpill.batt_kwh %}
               {% set batt_after_raw = batt_before + net_h %}
@@ -2288,7 +2289,7 @@ automation:
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
               {% set batt_h = z_h - pv_h %}
               {% if batt_h < 0 %}{% set batt_h = 0 %}{% endif %}
               {% set nsSurvive.total = nsSurvive.total + batt_h %}
@@ -2332,7 +2333,7 @@ automation:
                       {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z.get(h, cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
                       {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                       {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
   

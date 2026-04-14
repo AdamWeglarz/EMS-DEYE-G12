@@ -1071,7 +1071,7 @@ automation:
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = 0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * (2.0 if is_sprzatanie_h else 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}
@@ -1683,7 +1683,7 @@ automation:
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = 0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * (2.0 if is_sprzatanie_h else 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
 
             {% if h < current_hour %}
               {% set frac = 0 %}
@@ -1735,7 +1735,7 @@ automation:
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = 0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * (2.0 if is_sprzatanie_h else 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}
@@ -1921,7 +1921,7 @@ automation:
               {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = 0.5 if is_urlop_h else (dict_z[h|string] | default(cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+              {% set z_h = (dict_z[h|string] | default(cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
               {% set ns_cons15.total = ns_cons15.total + z_h %}
             {% endfor %}
             {% set cons_15_22 = ns_cons15.total %}
@@ -1966,7 +1966,7 @@ automation:
                       {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
                       {% set is_urlop_h = hk in urlop_hours %}
                       {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-                      {% set z_h = 0.5 if is_urlop_h else (dict_z[h|string] | default(cons_default)) * (2.0 if is_sprzatanie_h else cons_mult) %}
+                      {% set z_h = (dict_z[h|string] | default(cons_default)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(cons_default)) * cons_mult) %}
                       {% set base_delta_slot = (pv_h - z_h) / 4 %}
                       {% if price_kwh >= prog_pelny %}
                         {% set ns_slots.full = ns_slots.full + [{
@@ -2102,7 +2102,7 @@ automation:
             {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
             {% set is_urlop_h = hk in urlop_hours %}
             {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-            {% set z_h = 0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * (2.0 if is_sprzatanie_h else 1.15) %}
+            {% set z_h = (dict_z[h|string] | default(1.5)) * 2.0 if is_sprzatanie_h else (0.5 if is_urlop_h else (dict_z[h|string] | default(1.5)) * 1.15) %}
 
             {% set pv = namespace(v=0.0) %}
             {% for item in forecast_data %}
