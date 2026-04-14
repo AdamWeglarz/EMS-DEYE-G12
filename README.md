@@ -269,13 +269,13 @@ Automatyzacja uruchamiana codziennie o 05:29. Na podstawie prognozy `weather.pir
 
 ## Obsługa kalendarzy
 
-| Kalendarz | Efekt na planowanie |
-|---|---|
-| `calendar.urlop` | Zużycie = `magazyn_konsumpcja_urlop_kwh_h` (0,5 kWh/h; **priorytet nadrzędny**) |
-| `calendar.sprzatanie` | Zużycie = SQL × `magazyn_konsumpcja_mult_sprzatanie` (×2,0 kWh/h) |
-| Brak eventów | Zużycie = SQL × `magazyn_konsumpcja_multiplier` (×1,15) |
+| Kalendarz | Priorytet | Efekt na planowanie |
+|---|---|---|
+| `calendar.sprzatanie` | **1 (najwyższy)** | Zużycie = SQL × `magazyn_konsumpcja_mult_sprzatanie` (×2,0 kWh/h) |
+| `calendar.urlop` | 2 | Zużycie = `magazyn_konsumpcja_urlop_kwh_h` (0,5 kWh/h) |
+| Brak eventów | 3 | Zużycie = SQL × `magazyn_konsumpcja_multiplier` (×1,15) |
 
-Urlop ma wyższy priorytet niż sprzątanie – przy nakładaniu się eventów obowiązuje 0,5 kWh/h.
+Sprzątanie ma wyższy priorytet niż urlop – przy nakładaniu się eventów obowiązuje mnożnik sprzątania (×2,0).
 
 ---
 
