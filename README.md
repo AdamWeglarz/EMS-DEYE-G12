@@ -11,6 +11,7 @@ System zarządzania energią oparty na Home Assistant, sterujący ładowaniem i 
 | Falownik | Deye (SolarmanPV API v5) – integracja `solarman` |
 | Magazyn energii | Bateria podłączona do falownika Deye, pojemność skonfigurowana w `var.magazyn_pojemnosc_brutto_kwh` (domyślnie 15 kWh) |
 | Prognoza PV | Solcast (integracja HA) z modelem `detailedHourly` |
+| Prognoza pogody | Pirate Weather (`weather.pirateweather`) – warunki pogodowe do korekty minimalnego SOC rano |
 | Ceny energii | Sensor `sensor.rce_prices_today_scaled` / `tomorrow_scaled` – ceny RDN TGE z VAT (PLN/kWh) |
 | Taryfa OSD | **G12** – strefa droższa i tańsza (22:00–06:00 + 13:00–15:00) |
 | Baza danych | MariaDB (MySQL) – wymagana do zapytań SQL po historii zużycia |
@@ -136,10 +137,10 @@ O 22:00 system planuje całą noc JUTRO (22:00 → 13:00 następnego dnia):
 
 ## Bilansowanie godzinowe (wymóg prawny)
 
-Zgodnie z prawem energetycznym, prosumenci są rozliczani w bilansowaniu godzinowym (faktycznie 30-minutowym). System uwzględnia to przy planowaniu eksportu:
+Zgodnie z prawem energetycznym, prosumenci są rozliczani w bilansowaniu **godzinowym** (pełna godzina zegarowa). System uwzględnia to przy planowaniu eksportu:
 
 - Przed oddaniem energii w danej godzinie wylicza przewidywane zużycie do końca tej godziny
-- Rezerwuje odpowiednią energię w baterii, żeby nie importować z sieci w tej samej godzinie rozliczeniowej
+- Rezerwuje odpowiednią energię w baterii, żeby nie importować z sieci w tej samej godzinie rozliczeniowej – oddanie 1 kWh i zaciągnięcie 0,5 kWh w tej samej godzinie to strata netto
 - Snapshoty importu/eksportu zapisywane na starcie każdej godziny w `var.magazyn_import_snapshot_hh00` / `var.magazyn_eksport_snapshot_hh00`
 
 ---
@@ -210,7 +211,7 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 - **Tylko falownik Deye/Solarman** – sterowanie przez encje `select.solarman_program_*`, `number.solarman_*`, `switch.solarman_battery_grid_charging`. Inne falowniki wymagają przeróbki całej warstwy sterującej.
 - **Wymaga MariaDB** – zapytania SQL po historii zużycia działają wyłącznie z MySQL/MariaDB. SQLite (domyślna baza HA) nie obsługuje wymaganych funkcji (`CONVERT_TZ`, `DECIMAL`).
 - **Prognoza Solcast** – system zależy od jakości prognozy. Przy dużych odchyłach (zachmurzenie) działa tryb LOWPV jako zabezpieczenie.
-- **Planowanie godzinowe (nie 30-min)** – aktualnie pętle planowania operują na pełnych godzinach. Migracja na sloty 30-min jest zaplanowana (Asana backlog).
+- **Planowanie w rozdzielczości godzinowej** – pętle planowania operują na pełnych godzinach, co jest zgodne z godzinowym bilansowaniem prosumenckim.
 - **Jeden magazyn** – architektura zakłada pojedynczy magazyn energii. Wiele magazynów nie jest obsługiwanych.
 - **Brak obsługi feed-in tariff** – system zakłada model prosumencki z bilansowaniem (nie FIT stały).
 - **Sterowanie manualne** – podczas gdy automatyzacje działają, ręczna zmiana parametrów falownika z aplikacji Solarman może zostać nadpisana przez kolejną automatyzację.
