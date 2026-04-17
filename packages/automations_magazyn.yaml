@@ -2053,7 +2053,9 @@ automation:
             {% endfor %}
 
             {% set export_plan_batt_sum = nsFull.batt_sum + nsPart.batt_sum %}
-            {% set export_required_total_u = E_required_partial_evening + export_plan_batt_sum %}
+            {# Idealny plan (nieograniczony energią) — ile potrzeba gdyby wszystkie sloty były pełne #}
+            {% set export_ideal_batt_sum = (full_sorted | length + partial_sorted | length) * battery_slot_u_full %}
+            {% set export_required_total_u = E_required_partial_evening + export_ideal_batt_sum %}
             {% set export_plan_lines = nsFull.lines ~ nsPart.lines %}
             {% set has_export_slots = (export_plan_batt_sum > 0.01) %}
 
