@@ -354,6 +354,31 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 
 ---
 
+## Historia zmian
+
+### 2026-04-20
+- Dodano `sensor.solarman_total_load_consumption_safe` (trigger-based, `total_increasing`, nie spada przy reset)
+- Zmieniono `moc_pobierana_przez_dom` → `sensor.moc_pobierana_przez_dom_safe` z pełnym wzorcem `_safe` (filtr skoków ±20 kW, `availability: true`)
+- Naprawiono referencję w statistics sensor (wskazywał na nieistniejący `sensor.moc_pobierana_przez_dom_2`)
+- Pojemność baterii w `sensor.bateria_energia_kwh`: zahardkodowane `15.0` → `var.magazyn_pojemnosc_brutto_kwh`
+- `finanse_pv.yaml`: `cons_now` używa `sensor.solarman_total_load_consumption_safe`
+
+### 2026-04-19
+- Poprawiono wyliczanie `spill` i logikę limitu rano gdy spill
+
+### 2026-04-18
+- Poprawiono `export_topup` — używa idealnego planu zamiast ograniczonego energią
+
+### 2026-04-14
+- Domykacz: twardy stop przez `var` + stopper event-driven
+- Przeniesiono sensory SQL do `sensors_sql_pv.yaml`
+- Podzielono `lowpv_threshold` na rano i popołudnie + fix: brak slotów eksportu w trybie LOWPV
+- Zamiana stałych wartości na zmienne `var.*`
+- Sprzątanie ma wyższy priorytet niż urlop we wszystkich obliczeniach zużycia
+- Poprawiono wzór `soc_stop_target` dla trybu partial w eksporcie wieczornym
+
+---
+
 ## Backlog / TODO
 
 | Zadanie | Opis |
