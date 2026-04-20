@@ -1058,6 +1058,7 @@ automation:
             Smax_post=0.0,
             h_min=6,
             spill=0.0,
+            batt_kwh=E0_u,
             raport=""
           ) %}
 
@@ -1119,15 +1120,16 @@ automation:
                 {% set ns.S_post_13 = ns.S_post %}
               {% endif %}
 
-              {% set Eu_raw = E0_u + ns.S_post %}
-              {% if Eu_raw > max_ene_u %}
-                {% set Eu_show = max_ene_u %}
-                {% set ns.spill = ns.spill + (Eu_raw - max_ene_u) %}
-              {% elif Eu_raw < 0 %}
-                {% set Eu_show = 0 %}
+              {% set batt_after = ns.batt_kwh + delta %}
+              {% if batt_after > max_ene_u %}
+                {% set ns.spill = ns.spill + (batt_after - max_ene_u) %}
+                {% set ns.batt_kwh = max_ene_u %}
+              {% elif batt_after < 0 %}
+                {% set ns.batt_kwh = 0 %}
               {% else %}
-                {% set Eu_show = Eu_raw %}
+                {% set ns.batt_kwh = batt_after %}
               {% endif %}
+              {% set Eu_show = ns.batt_kwh %}
 
               {% set w_soc = ((((Eu_show + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0)) | int %}
               {% if w_soc < 0 %}{% set w_soc = 0 %}{% endif %}
@@ -1393,14 +1395,23 @@ automation:
           {% endif %}
 
           {# ===== STICKY / MONOTONIC RANO ===== #}
-          {% set grid_juz_on = is_state('input_boolean.battery_charge_from_grid', 'on') %}
-          {% set czy_ladowac_final = (grid_juz_on or czy_ladowac) %}
-
-          {% set cel_final = cel %}
-          {% if cel_final < soc_akt %}
-            {% set cel_final = soc_akt | round(0) | int %}
+          {% if E6_base > E6_safe_max %}
+            {# Spill: ogranicz do max bez spillu, ale nie mniej niż minimum rano #}
+            {% set E6_target = [E6_plan_required, E6_safe_max] | max %}
+            {% set cel_final = (((E6_target + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+            {% if cel_final < 25 %}{% set cel_final = 25 %}{% endif %}
+            {% if cel_final > 100 %}{% set cel_final = 100 %}{% endif %}
+            {% set czy_ladowac_final = true %}
+          {% else %}
+            {# Brak spillu: sticky – nie obniżaj celu w kolejnych iteracjach #}
+            {% set grid_juz_on = is_state('input_boolean.battery_charge_from_grid', 'on') %}
+            {% set czy_ladowac_final = (grid_juz_on or czy_ladowac) %}
+            {% set cel_final = cel %}
+            {% if cel_final < soc_akt %}
+              {% set cel_final = soc_akt | round(0) | int %}
+            {% endif %}
+            {% if cel_final > 100 %}{% set cel_final = 100 %}{% endif %}
           {% endif %}
-          {% if cel_final > 100 %}{% set cel_final = 100 %}{% endif %}
 
           {% set ns.raport = ns.raport ~
             "\nTARGET13 | target_soc:" ~ target_soc_13|round(0) ~
