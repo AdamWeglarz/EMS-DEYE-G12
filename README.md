@@ -305,6 +305,8 @@ Falownik Deye przez SolarmanPV API zwraca nieraz `unknown`/`unavailable` lub sko
 - `sensor.solarman_total_energy_sold_safe` – nie spada, ignoruje reset okienny (23:30–00:10)
 - `sensor.solarman_total_energy_bought_safe` – analogicznie dla importu
 - `sensor.solarman_daily_energy_sold_safe` – stabilizuje dzienny licznik sprzedaży
+- `sensor.solarman_total_load_consumption_safe` – stabilizuje licznik całkowitego zużycia (trigger-based, `total_increasing`, nie spada)
+- `sensor.moc_pobierana_przez_dom_safe` – filtruje skoki mocy pobieranej przez dom (odrzuca wartości poza ±20 kW i `unavailable`)
 
 ---
 
