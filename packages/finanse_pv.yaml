@@ -8,7 +8,7 @@
 #
 # Źródła:
 #   import/eksport: sensor.solarman_total_energy_bought/sold_safe (ciągłe)
-#   konsumpcja:     sensor.solarman_total_load_consumption (ciągłe)
+#   konsumpcja:     sensor.solarman_total_load_consumption_safe (ciągłe)
 #   cena RCE:       state_attr('sensor.rce_prices_today_scaled','value') per slot
 #   G12:            var.magazyn_koszt_calkowity_strefa_drozsza/tansza_pln_kwh
 #   G11:            var.g11_cena_kwh = 0.96 PLN/kWh (flat)
@@ -279,7 +279,7 @@ automation:
       - variables:
           bought_now: "{{ states('sensor.solarman_total_energy_bought_safe') | float(0) }}"
           sold_now: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
-          cons_now: "{{ states('sensor.solarman_total_load_consumption') | float(0) }}"
+          cons_now: "{{ states('sensor.solarman_total_load_consumption_safe') | float(0) }}"
           prev_bought: "{{ states('var.finanse_prev_bought_kwh') | float(0) }}"
           prev_sold: "{{ states('var.finanse_prev_sold_kwh') | float(0) }}"
           prev_cons: "{{ states('var.finanse_prev_cons_kwh') | float(0) }}"
@@ -297,7 +297,7 @@ automation:
             {% set d = cons_now - prev_cons %}
             {{ d if (prev_cons > 0 and d >= 0 and d < 5) else 0 }}
 
-          # Cena RCE dla slotu który właśnie minął: prev_time + 15min = dtime wpisu
+          # Cena RCE dla slotu który właśnie minął: dtime = koniec slotu = prev_ts + 15min
           cena_sprzedazy_kwh: >
             {% set ceny = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
             {% if prev_time_str == '2000-01-01 00:00:00' or ceny | length == 0 %}

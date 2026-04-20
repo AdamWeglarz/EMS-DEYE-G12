@@ -11,7 +11,7 @@ template:
         icon: mdi:battery-high
         state: >
           {% set soc = states('sensor.solarman_battery') | float(0) %}
-          {% set capacity = 15.0 %}
+          {% set capacity = states('var.magazyn_pojemnosc_brutto_kwh') | float(15.0) %}
           {{ ((soc / 100) * capacity) | round(2) }}
 
   - sensor:
@@ -113,32 +113,26 @@ template:
           {% endif %}
 
   - sensor:
-    - name: "Moc pobierana przez dom"
-      unique_id: load_power_filtered
+    - name: "Moc pobierana przez dom safe"
+      unique_id: moc_pobierana_przez_dom_safe
       unit_of_measurement: "W"
       device_class: power
       state_class: measurement
       state: >
         {% set source = states('sensor.solarman_load_ups_power') %}
+        {% set prev_s = this.state %}
         {% if source in ['unavailable', 'unknown'] %}
-          unknown
+          {{ prev_s if prev_s not in ['unavailable', 'unknown', 'none', ''] else 0 }}
         {% else %}
           {% set power = source | float(default=0) %}
           {% if power > 20000 or power < -20000 %}
-            {# Zwraca poprzedni stan sensora zamiast błędu, aby uniknąć dziur w wykresie #}
-            {{ states('sensor.moc_pobierana_przez_dom') }}
+            {{ prev_s if prev_s not in ['unavailable', 'unknown', 'none', ''] else 0 }}
           {% else %}
             {{ power }}
           {% endif %}
         {% endif %}
-      attributes:
-        original_entity: sensor.solarman_load_ups_power
-        filter_type: "peak_removal"
-        threshold_high: 20000
-        threshold_low: -20000
-        last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
       icon: mdi:home-lightning-bolt
-      availability: "{{ states('sensor.solarman_load_ups_power') not in ['unavailable', 'unknown'] }}"
+      availability: true
 
   - sensor:
     - name: "Solarman Microinverter Power Safe"
@@ -174,6 +168,32 @@ template:
           {{ power }}
         {% endif %}
       availability: "{{ states('sensor.solarman_external_power') not in ['unavailable', 'unknown', 'none'] }}"
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.solarman_total_load_consumption
+    sensor:
+      - name: "Solarman Total Load Consumption Safe"
+        unique_id: solarman_total_load_consumption_safe
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >
+          {% set raw_s = states('sensor.solarman_total_load_consumption') %}
+          {% set prev_s = this.state %}
+
+          {% if raw_s in ['unknown', 'unavailable', 'none', ''] %}
+            {{ prev_s if prev_s not in ['unknown', 'unavailable', 'none', ''] else 0 }}
+          {% else %}
+            {% set raw = raw_s | float(0) %}
+            {% if prev_s in ['unknown', 'unavailable', 'none', ''] %}
+              {{ raw | round(3) }}
+            {% else %}
+              {% set prev = prev_s | float(0) %}
+              {{ [raw, prev] | max | round(3) }}
+            {% endif %}
+          {% endif %}
+        availability: true
 
   - trigger:
       - platform: state
@@ -446,7 +466,7 @@ sensor:
   - platform: statistics
     name: Średnia moc pobierana przez dom 2 5 minut
     unique_id: srednia_moc_pobierana_przez_dom_2_5_minut
-    entity_id: sensor.moc_pobierana_przez_dom_2
+    entity_id: sensor.moc_pobierana_przez_dom_safe
     max_age:
       minutes: 5
     state_characteristic: average_linear
