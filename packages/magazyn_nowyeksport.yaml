@@ -145,16 +145,16 @@ automation:
         data:
           query: >
             SELECT
-              HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}')) AS h,
+              (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))/30)) AS slot,
               AVG(CAST(s.state AS DECIMAL(10,3))) AS avg_h
             FROM states s
             JOIN states_meta m ON s.metadata_id = m.metadata_id
-            WHERE m.entity_id = 'sensor.srednie_zuzycie_o_obecnej_godzinie'
+            WHERE m.entity_id = 'sensor.srednie_zuzycie_w_obecnym_slocie_30min'
               AND s.state NOT IN ('unknown', 'unavailable', '')
               AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - {{ lookback_sec }})
-              AND HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}')) BETWEEN {{ h_now }} AND 13
-            GROUP BY h
-            ORDER BY h;
+              AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))/30)) BETWEEN {{ h_now * 2 }} AND 27
+            GROUP BY slot
+            ORDER BY slot;
         response_variable: statystyki_konsumpcji
 
       - service: calendar.get_events
@@ -177,20 +177,20 @@ automation:
           pack: >-
             {% set slot_start_min = (m_now // 15) * 15 %}
             {% set slot_start_total = (h_now * 60 + slot_start_min) %}
-            {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedHourly') or [] %}
+            {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedForecast') or [] %}
             {% set dzis = now().date() %}
             {% set plan_date = dzis %}
 
-            {# ===== URLOP: lista godzin dla dzisiejszego planu ===== #}
+            {# ===== URLOP: lista slotów (YYYY-MM-DD HH:MM) dla dzisiejszego planu ===== #}
             {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
             {% set urlop_ns = namespace(hours=[]) %}
             {% for ev in urlop_list %}
               {% set es = as_datetime(ev.start) | as_local %}
               {% set ee = as_datetime(ev.end) | as_local %}
-              {% for off in range(0, 24) %}
-                {% set probe = now().replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+              {% for off in range(0, 48) %}
+                {% set probe = now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=off*30) %}
                 {% if probe >= es and probe < ee %}
-                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H:%M') %}
                   {% if hk not in urlop_ns.hours %}
                     {% set urlop_ns.hours = urlop_ns.hours + [hk] %}
                   {% endif %}
@@ -199,16 +199,16 @@ automation:
             {% endfor %}
             {% set urlop_hours = urlop_ns.hours %}
 
-            {# ===== SPRZATANIE: lista godzin dla dzisiejszego planu ===== #}
+            {# ===== SPRZATANIE: lista slotów (YYYY-MM-DD HH:MM) dla dzisiejszego planu ===== #}
             {% set sprzatanie_list = (sprzatanie_events['calendar.sprzatanie'].events if (sprzatanie_events and 'calendar.sprzatanie' in sprzatanie_events) else []) %}
             {% set sprzatanie_ns = namespace(hours=[]) %}
             {% for ev in sprzatanie_list %}
               {% set es = as_datetime(ev.start) | as_local %}
               {% set ee = as_datetime(ev.end) | as_local %}
-              {% for off in range(0, 24) %}
-                {% set probe = now().replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+              {% for off in range(0, 48) %}
+                {% set probe = now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=off*30) %}
                 {% if probe >= es and probe < ee %}
-                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H:%M') %}
                   {% if hk not in sprzatanie_ns.hours %}
                     {% set sprzatanie_ns.hours = sprzatanie_ns.hours + [hk] %}
                   {% endif %}
@@ -244,9 +244,12 @@ automation:
             {% set rows = statystyki_konsumpcji['result'] if (statystyki_konsumpcji is mapping and 'result' in statystyki_konsumpcji) else [] %}
             {% set nsC = namespace(d={}) %}
             {% for row in rows %}
-              {% set nsC.d = nsC.d | combine({ (row['h']|int): (row['avg_h']|float(0)) }) %}
+              {% set nsC.d = nsC.d | combine({ (row['slot']|int): (row['avg_h']|float(0)) }) %}
             {% endfor %}
             {% set dict_z = nsC.d %}
+
+            {% set cons_default_slot = cons_default | float(1.5) / 2 %}
+            {% set urlop_kwh_slot = urlop_kwh_h | float(0.5) / 2 %}
 
             {% set dzis_local = now().date() %}
             {% set nsP = namespace(d={}) %}
@@ -254,22 +257,23 @@ automation:
               {% for item in forecast_data %}
                 {% if item is mapping and item.period_start is defined %}
                   {% set ts = item.period_start %}
+                  {% set s_it = ts.hour * 2 + (ts.minute // 30) %}
                   {% if ts.date() == dzis_local and ts.hour >= 6 and ts.hour <= 21 %}
                     {% set pv_value = item.pv_estimate | float(0) %}
-                    {% set nsP.d = nsP.d | combine({ ts.hour: pv_value }) %}
+                    {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                   {% endif %}
                 {% endif %}
               {% endfor %}
             {% endif %}
             {% set pv_d = nsP.d %}
 
-            {# --- koniec produkcji PV wg prognozy (spill liczony do pv_end_excl, fallback 14) --- #}
-            {% set nsE = namespace(last=13) %}
-            {% for h in range(0, 24) %}
-              {% if pv_d.get(h, 0) > 0.1 %}{% set nsE.last = h %}{% endif %}
+            {# --- koniec produkcji PV wg prognozy (spill liczony do pv_end_slot_excl, fallback slot 28=14:00) --- #}
+            {% set nsE = namespace(last=27) %}
+            {% for s_e in range(0, 48) %}
+              {% if pv_d.get(s_e, 0) > 0.1 %}{% set nsE.last = s_e %}{% endif %}
             {% endfor %}
-            {% set pv_end_excl = nsE.last + 1 %}
-            {% if pv_end_excl < 14 %}{% set pv_end_excl = 14 %}{% endif %}
+            {% set pv_end_slot_excl = nsE.last + 1 %}
+            {% if pv_end_slot_excl < 28 %}{% set pv_end_slot_excl = 28 %}{% endif %}
 
             {% set floor_kwh = (pojemnosc_kwh * soc_floor_pct / 100) %}
             {% set max_u = pojemnosc_kwh - floor_kwh %}
@@ -282,45 +286,50 @@ automation:
             {% if E_reserve_u < 0 %}{% set E_reserve_u = 0 %}{% endif %}
             {% if E_reserve_u > max_u %}{% set E_reserve_u = max_u %}{% endif %}
 
-            {% set current_hour_factor = ((60 - m_now) / 60) | float(0) %}
+            {% set s_now = h_now * 2 + (m_now // 30) %}
+            {% set current_slot_factor = ((30 - m_now % 30) / 30) | float(0) %}
 
             {% set ns_cons = namespace(total=0.0) %}
             {% set ns_pv_sum = namespace(total=0.0) %}
-            {% for h in range(h_now, 14) %}
-              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+            {% for s in range(s_now, 28) %}
+              {% set h = s // 2 %}
+              {% set m = (s % 2) * 30 %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(h, m) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
-              {% set pv_h = pv_d.get(h, 0) %}
-              {% set factor = current_hour_factor if h == h_now else 1 %}
-              {% set z_eff = z_h * factor %}
-              {% set pv_eff = pv_h * factor %}
+              {% set z_s = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
+              {% set pv_s = pv_d.get(s, 0) %}
+              {% set factor = current_slot_factor if s == s_now else 1 %}
+              {% set z_eff = z_s * factor %}
+              {% set pv_eff = pv_s * factor %}
               {% set ns_cons.total = ns_cons.total + z_eff %}
               {% set ns_pv_sum.total = ns_pv_sum.total + pv_eff %}
             {% endfor %}
 
             {# --- spill liczony do końca produkcji PV --- #}
             {% set ns_spill = namespace(total=0.0, e_u=E0_u, lines='') %}
-            {% for h in range(h_now, pv_end_excl) %}
-              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+            {% for s in range(s_now, pv_end_slot_excl) %}
+              {% set h = s // 2 %}
+              {% set m = (s % 2) * 30 %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(h, m) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
-              {% set pv_h = pv_d.get(h, 0) %}
-              {% set factor = current_hour_factor if h == h_now else 1 %}
-              {% set z_eff = z_h * factor %}
-              {% set pv_eff = pv_h * factor %}
+              {% set z_s = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
+              {% set pv_s = pv_d.get(s, 0) %}
+              {% set factor = current_slot_factor if s == s_now else 1 %}
+              {% set z_eff = z_s * factor %}
+              {% set pv_eff = pv_s * factor %}
               {% set d = pv_eff - z_eff %}
 
               {% set e_raw = ns_spill.e_u + d %}
               {% if e_raw > max_u %}
-                {% set spill_h = e_raw - max_u %}
-                {% set ns_spill.total = ns_spill.total + spill_h %}
+                {% set spill_s = e_raw - max_u %}
+                {% set ns_spill.total = ns_spill.total + spill_s %}
                 {% set ns_spill.lines = ns_spill.lines ~
-                  "\n- G:" ~ ("%02d:00" % h) ~
-                  " | d:" ~ (d|round(2)) ~
-                  " | E_raw:" ~ (e_raw|round(2)) ~
-                  " | spill:" ~ (spill_h|round(2))
+                  "\n- S:" ~ ("%02d:%02d" % (h, m)) ~
+                  " | d:" ~ (d|round(3)) ~
+                  " | E_raw:" ~ (e_raw|round(3)) ~
+                  " | spill:" ~ (spill_s|round(3))
                 %}
                 {% set ns_spill.e_u = max_u %}
               {% elif e_raw < 0 %}
@@ -356,8 +365,16 @@ automation:
                  SOC stop = floor + reserve_po_slocie #}
             {% set slot_end_min = slot_start_min + 15 %}
             {% set mins_rest_of_hour = 60 - slot_end_min %}
-            {% set z_h_eoh = dict_z.get(h_now, cons_default) * cons_mult %}
-            {% set pv_h_eoh = pv_d.get(h_now, 0) %}
+            {% set ns_zh_eoh = namespace(v=0.0) %}
+            {% for s_eoh in [h_now * 2, h_now * 2 + 1] %}
+              {% set hk_eoh = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(h_now, (s_eoh % 2) * 30) %}
+              {% set is_urlop_eoh = hk_eoh in urlop_hours %}
+              {% set is_sprz_eoh = hk_eoh in sprzatanie_hours %}
+              {% set z_eoh_s = dict_z.get(s_eoh, cons_default_slot) * sprzatanie_mult if is_sprz_eoh else (urlop_kwh_slot if is_urlop_eoh else dict_z.get(s_eoh, cons_default_slot) * cons_mult) %}
+              {% set ns_zh_eoh.v = ns_zh_eoh.v + z_eoh_s %}
+            {% endfor %}
+            {% set z_h_eoh = ns_zh_eoh.v %}
+            {% set pv_h_eoh = pv_d.get(h_now * 2, 0) + pv_d.get(h_now * 2 + 1, 0) %}
             {% set house_kwh_this_slot = [z_h_eoh * 15 / 60 - pv_h_eoh * 15 / 60, 0] | max %}
             {% set bat_eoh_reserve = [z_h_eoh * mins_rest_of_hour / 60 - pv_h_eoh * mins_rest_of_hour / 60, 0] | max %}
 
@@ -390,11 +407,14 @@ automation:
                       {% set price_mwh = c.rce_pln | float(0) %}
                       {% set price_kwh = price_mwh / 1000 %}
                       {% if price_kwh >= full_bat_min_price %}
-                        {% set pv_h = pv_d.get(h, 0) %}
-                        {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
-              {% set is_urlop_h = hk in urlop_hours %}
-              {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+                        {% set pv_h = pv_d.get(h*2, 0) + pv_d.get(h*2+1, 0) %}
+                        {% set hk0 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:00'|format(h) %}
+                        {% set hk1 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:30'|format(h) %}
+              {% set is_urlop_h = hk0 in urlop_hours or hk1 in urlop_hours %}
+              {% set is_sprzatanie_h = hk0 in sprzatanie_hours or hk1 in sprzatanie_hours %}
+              {% set z_h0 = (dict_z.get(h*2, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2, cons_default_slot)) * cons_mult) %}
+              {% set z_h1 = (dict_z.get(h*2+1, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2+1, cons_default_slot)) * cons_mult) %}
+              {% set z_h = z_h0 + z_h1 %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsFullCand.list = nsFullCand.list + [{
@@ -462,11 +482,14 @@ automation:
                       {% set price_mwh = c.rce_pln | float(0) %}
                       {% set price_kwh = price_mwh / 1000 %}
                       {% if price_kwh >= semi_bat_min_price and price_kwh < full_bat_min_price %}
-                        {% set pv_h = pv_d.get(h, 0) %}
-                        {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
-              {% set is_urlop_h = hk in urlop_hours %}
-              {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+                        {% set pv_h = pv_d.get(h*2, 0) + pv_d.get(h*2+1, 0) %}
+                        {% set hk0 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:00'|format(h) %}
+                        {% set hk1 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:30'|format(h) %}
+              {% set is_urlop_h = hk0 in urlop_hours or hk1 in urlop_hours %}
+              {% set is_sprzatanie_h = hk0 in sprzatanie_hours or hk1 in sprzatanie_hours %}
+              {% set z_h0 = (dict_z.get(h*2, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2, cons_default_slot)) * cons_mult) %}
+              {% set z_h1 = (dict_z.get(h*2+1, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2+1, cons_default_slot)) * cons_mult) %}
+              {% set z_h = z_h0 + z_h1 %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsSemiCand.list = nsSemiCand.list + [{
@@ -534,11 +557,14 @@ automation:
                       {% set price_mwh = c.rce_pln | float(0) %}
                       {% set price_kwh = price_mwh / 1000 %}
                       {% if price_kwh >= spill_pv_min_price and price_kwh < semi_bat_min_price %}
-                        {% set pv_h = pv_d.get(h, 0) %}
-                        {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
-              {% set is_urlop_h = hk in urlop_hours %}
-              {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+                        {% set pv_h = pv_d.get(h*2, 0) + pv_d.get(h*2+1, 0) %}
+                        {% set hk0 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:00'|format(h) %}
+                        {% set hk1 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:30'|format(h) %}
+              {% set is_urlop_h = hk0 in urlop_hours or hk1 in urlop_hours %}
+              {% set is_sprzatanie_h = hk0 in sprzatanie_hours or hk1 in sprzatanie_hours %}
+              {% set z_h0 = (dict_z.get(h*2, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2, cons_default_slot)) * cons_mult) %}
+              {% set z_h1 = (dict_z.get(h*2+1, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2+1, cons_default_slot)) * cons_mult) %}
+              {% set z_h = z_h0 + z_h1 %}
                         {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                         {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
                         {% set nsSpillCand.list = nsSpillCand.list + [{
@@ -615,8 +641,8 @@ automation:
               plan_energy=0.0,
               mode='none',
               price_zone='none',
-              hour_cons=0.0,
-              hour_pv=0.0
+              slot_cons=0.0,
+              slot_pv=0.0
             ) %}
             {% for s in chosen_all %}
               {% if s.period == current_slot_period %}
@@ -635,12 +661,12 @@ automation:
                 {% else %}
                   {% set nsCur.price_zone = 'none' %}
                 {% endif %}
-                {% set cur_h = now().hour %}
-                {% set cur_hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(cur_h) %}
+                {% set cur_s = now().hour * 2 + (now().minute // 30) %}
+                {% set cur_hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(cur_s // 2, (cur_s % 2) * 30) %}
                 {% set cur_is_urlop = cur_hk in urlop_hours %}
                 {% set cur_is_sprzatanie = cur_hk in sprzatanie_hours %}
-                {% set nsCur.hour_cons = (dict_z.get(cur_h, cons_default)) * sprzatanie_mult if cur_is_sprzatanie else (urlop_kwh_h if cur_is_urlop else ((dict_z.get(cur_h, cons_default)) * cons_mult)) %}
-                {% set nsCur.hour_pv = (pv_d.get(cur_h, 0)) %}
+                {% set nsCur.slot_cons = (dict_z.get(cur_s, cons_default_slot)) * sprzatanie_mult if cur_is_sprzatanie else (urlop_kwh_slot if cur_is_urlop else ((dict_z.get(cur_s, cons_default_slot)) * cons_mult)) %}
+                {% set nsCur.slot_pv = (pv_d.get(cur_s, 0)) %}
               {% endif %}
             {% endfor %}
 
@@ -674,13 +700,13 @@ automation:
             {% set top_lines = nsFull.lines ~ nsSemi.lines ~ nsSpillPlan.lines %}
 
             {% set nsRpt = namespace(lines='', e_u=E0_u, s=0.0) %}
-            {% for h in range(h_now, pv_end_excl) %}
-              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+            {% for s in range(s_now, pv_end_slot_excl) %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(s // 2, (s % 2) * 30) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
-              {% set pv_h = pv_d.get(h, 0) %}
-              {% set factor = current_hour_factor if h == h_now else 1 %}
+              {% set z_h = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
+              {% set pv_h = pv_d.get(s, 0) %}
+              {% set factor = current_slot_factor if s == s_now else 1 %}
               {% set z_eff = z_h * factor %}
               {% set pv_eff = pv_h * factor %}
               {% set d = pv_eff - z_eff %}
@@ -690,7 +716,7 @@ automation:
               {% if e_u_next > max_u %}{% set e_u_next = max_u %}{% endif %}
               {% set soc_next = ((e_u_next + floor_kwh) / pojemnosc_kwh * 100) | round(0) | int %}
               {% set nsRpt.lines = nsRpt.lines ~
-                "\nG:" ~ ("%02d:00" % h) ~
+                "\nS:" ~ ("%02d:%02d" % (s // 2, (s % 2) * 30)) ~
                 " | Z:" ~ (z_eff|round(2)) ~
                 " | PV:" ~ (pv_eff|round(2)) ~
                 " | d:" ~ (d|round(2)) ~
@@ -717,7 +743,7 @@ automation:
               nsRpt.lines
             %}
 
-            {{ current_slot_period }}###{{ cena_aktualna|round(2) }}###{{ plan_list|join('|') }}###{{ in_plan_now }}###{{ (chosen_all|count) }}###{{ (plan_list|count) }}###{{ plan_sum|round(2) }}###{{ pozostalo|round(2) }}###{{ top_lines }}###{{ pv_hours_debug }}###{{ soc_min_dynamic_13 }}###{{ cena_aktualna_kwh|round(4) }}###{{ 'YES' if battery_can_export_now else 'NO' }}###{{ E0_u|round(2) }}###{{ E_min_partial|round(2) }}###{{ E_reserve_u|round(2) }}###{{ calkowite_zuzycie_kwh|round(2) }}###{{ calkowite_pv_kwh|round(2) }}###{{ energia_z_baterii|round(2) }}###{{ spill_pv_min_price|round(3) }}###{{ spill_bat_min_price|round(3) }}###{{ semi_bat_min_price|round(3) }}###{{ full_bat_min_price|round(3) }}###{{ current_mode }}###{{ 'YES' if pv_can_export_now else 'NO' }}###{{ plan_total_with_sold|round(2) }}###{{ battery_budget_spill|round(2) }}###{{ battery_budget_semi|round(2) }}###{{ battery_budget_full|round(2) }}###{{ battery_slot_cap_kwh|round(2) }}###{{ nsCur.pv_slot_energy|round(3) }}###{{ nsCur.bat_slot_energy|round(3) }}###{{ nsCur.plan_energy|round(3) }}###{{ nsCur.mode }}###{{ nsCur.price_zone }}###{{ nsCur.hour_cons|round(3) }}###{{ nsCur.hour_pv|round(3) }}###{{ semi_soc_floor_pct }}###{{ spill_bat_soc_min_pct }}###{{ raport_stat }}###{{ spill_real_lines }}###{{ pv_end_excl }}###{{ pv_power_5m_w | round(1) }}###{{ house_power_5m_w | round(1) }}###{{ pv_surplus_min_w | round(1) }}###{{ 'YES' if pv_surplus_5m_ok else 'NO' }}###{{ soc_stop_full_rano }}###{{ house_kwh_this_slot | round(3) }}
+            {{ current_slot_period }}###{{ cena_aktualna|round(2) }}###{{ plan_list|join('|') }}###{{ in_plan_now }}###{{ (chosen_all|count) }}###{{ (plan_list|count) }}###{{ plan_sum|round(2) }}###{{ pozostalo|round(2) }}###{{ top_lines }}###{{ pv_hours_debug }}###{{ soc_min_dynamic_13 }}###{{ cena_aktualna_kwh|round(4) }}###{{ 'YES' if battery_can_export_now else 'NO' }}###{{ E0_u|round(2) }}###{{ E_min_partial|round(2) }}###{{ E_reserve_u|round(2) }}###{{ calkowite_zuzycie_kwh|round(2) }}###{{ calkowite_pv_kwh|round(2) }}###{{ energia_z_baterii|round(2) }}###{{ spill_pv_min_price|round(3) }}###{{ spill_bat_min_price|round(3) }}###{{ semi_bat_min_price|round(3) }}###{{ full_bat_min_price|round(3) }}###{{ current_mode }}###{{ 'YES' if pv_can_export_now else 'NO' }}###{{ plan_total_with_sold|round(2) }}###{{ battery_budget_spill|round(2) }}###{{ battery_budget_semi|round(2) }}###{{ battery_budget_full|round(2) }}###{{ battery_slot_cap_kwh|round(2) }}###{{ nsCur.pv_slot_energy|round(3) }}###{{ nsCur.bat_slot_energy|round(3) }}###{{ nsCur.plan_energy|round(3) }}###{{ nsCur.mode }}###{{ nsCur.price_zone }}###{{ nsCur.slot_cons|round(3) }}###{{ nsCur.slot_pv|round(3) }}###{{ semi_soc_floor_pct }}###{{ spill_bat_soc_min_pct }}###{{ raport_stat }}###{{ spill_real_lines }}###{{ pv_end_slot_excl }}###{{ pv_power_5m_w | round(1) }}###{{ house_power_5m_w | round(1) }}###{{ pv_surplus_min_w | round(1) }}###{{ 'YES' if pv_surplus_5m_ok else 'NO' }}###{{ soc_stop_full_rano }}###{{ house_kwh_this_slot | round(3) }}
 
       - variables:
           current_slot_period: "{{ pack.split('###')[0] }}"
@@ -756,13 +782,13 @@ automation:
           current_plan_energy: "{{ pack.split('###')[32] | float(0) }}"
           current_mode_dbg: "{{ pack.split('###')[33] }}"
           current_price_zone: "{{ pack.split('###')[34] }}"
-          current_hour_cons: "{{ pack.split('###')[35] | float(0) }}"
-          current_hour_pv: "{{ pack.split('###')[36] | float(0) }}"
+          current_slot_cons: "{{ pack.split('###')[35] | float(0) }}"
+          current_slot_pv: "{{ pack.split('###')[36] | float(0) }}"
           semi_soc_floor_pct: "{{ pack.split('###')[37] | int(50) }}"
           spill_bat_soc_min_pct_dbg: "{{ pack.split('###')[38] | int(30) }}"
           raport_stat: "{{ pack.split('###')[39] }}"
           spill_real_lines: "{{ pack.split('###')[40] }}"
-          pv_end_excl: "{{ pack.split('###')[41] | int(14) }}"
+          pv_end_slot_excl: "{{ pack.split('###')[41] | int(28) }}"
           pv_power_5m_w: "{{ pack.split('###')[42] | float(0) }}"
           house_power_5m_w: "{{ pack.split('###')[43] | float(0) }}"
           pv_surplus_min_w: "{{ pack.split('###')[44] | float(0) }}"
@@ -806,8 +832,8 @@ automation:
             current_plan_energy: "{{ current_plan_energy }}"
             current_mode_dbg: "{{ current_mode_dbg }}"
             current_price_zone: "{{ current_price_zone }}"
-            current_hour_cons: "{{ current_hour_cons }}"
-            current_hour_pv: "{{ current_hour_pv }}"
+            current_slot_cons: "{{ current_slot_cons }}"
+            current_slot_pv: "{{ current_slot_pv }}"
             pv_power_5m_w: "{{ pv_power_5m_w }}"
             house_power_5m_w: "{{ house_power_5m_w }}"
             pv_surplus_min_w: "{{ pv_surplus_min_w }}"
@@ -851,7 +877,7 @@ automation:
         data:
           title: "📊 Plan porannego eksportu"
           message: >
-            🎯 Fizyczny spill od teraz do końca produkcji ({{ '%02d:00' | format(pv_end_excl) }}): {{ pozostalo | round(2) }} kWh
+            🎯 Fizyczny spill od teraz do końca produkcji ({{ '%02d:%02d' | format(pv_end_slot_excl // 2, (pv_end_slot_excl % 2) * 30) }}): {{ pozostalo | round(2) }} kWh
 
             📈 Plan:
             - Slotów: {{ plan_count }}
@@ -883,8 +909,8 @@ automation:
             - PV slot: {{ current_pv_slot_energy | round(3) }} kWh
             - BAT slot: {{ current_bat_slot_energy | round(3) }} kWh
             - Plan slot: {{ current_plan_energy | round(3) }} kWh
-            - Zużycie godziny: {{ current_hour_cons | round(3) }} kWh
-            - PV godziny: {{ current_hour_pv | round(3) }} kWh
+            - Zużycie slotu: {{ current_slot_cons | round(3) }} kWh
+            - PV slotu: {{ current_slot_pv | round(3) }} kWh
             - Śr. moc PV 5 min: {{ pv_power_5m_w | round(0) }} W
             - Śr. pobór domu 5 min: {{ house_power_5m_w | round(0) }} W
             - Min PV do eksportu: {{ pv_surplus_min_w | round(0) }} W
@@ -916,7 +942,7 @@ automation:
             | batt_budget_spill={{ battery_budget_spill }} batt_budget_semi={{ battery_budget_semi }} batt_budget_full={{ battery_budget_full }} slot_cap={{ battery_slot_cap_kwh }}
             | current_mode_dbg={{ current_mode_dbg }} current_zone={{ current_price_zone }}
             | current_pv_slot={{ current_pv_slot_energy }} current_bat_slot={{ current_bat_slot_energy }} current_plan={{ current_plan_energy }}
-            | hour_cons={{ current_hour_cons }} hour_pv={{ current_hour_pv }}
+            | slot_cons={{ current_slot_cons }} slot_pv={{ current_slot_pv }}
             | pv_5m={{ pv_power_5m_w }}W house_5m={{ house_power_5m_w }}W pv_min={{ pv_surplus_min_w }}W pv_surplus_ok={{ 'YES' if pv_surplus_5m_ok else 'NO' }}
             | pv_can={{ 'YES' if pv_can_export_now else 'NO' }}
             | batt_can={{ 'YES' if battery_can_export_now else 'NO' }}
@@ -1072,7 +1098,7 @@ automation:
                 data:
                   title: "📈 Podsumowanie porannego eksportu"
                   message: >
-                    🔄 Fizyczny spill od teraz do końca produkcji ({{ '%02d:00' | format(pv_end_excl) }}): {{ pozostalo | round(2) }} kWh
+                    🔄 Fizyczny spill od teraz do końca produkcji ({{ '%02d:%02d' | format(pv_end_slot_excl // 2, (pv_end_slot_excl % 2) * 30) }}): {{ pozostalo | round(2) }} kWh
                     ✅ Sprzedano: {{ energy_sold | round(2) }} kWh
                     📦 Plan eksportu: {{ plan_sum | round(2) }} kWh
                     🔋 SOC końcowy: {{ soc_current | round(1) }}%
@@ -1287,7 +1313,7 @@ automation:
       - plan wybiera najlepsze sloty wg ceny
       - eksport działa tylko, gdy aktualny slot jest w planie
       - brak danych PV NIE blokuje wykonania eksportu
-      - FIX: PV bierze detailedHourly, a jeśli brak to detailedForecast
+      - FIX: PV bierze detailedForecast (30-min sloty)
       - FIX: PARTIAL nie odejmuje zużycia domu drugi raz
   
     trigger:
@@ -1389,16 +1415,19 @@ automation:
         data:
           query: >
             SELECT
-              HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) AS h,
+              (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) * 2
+               + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) / 30)) AS slot,
               AVG(CAST(s.state AS DECIMAL(10,3))) AS avg_h
             FROM states s
             JOIN states_meta m ON s.metadata_id = m.metadata_id
-            WHERE m.entity_id = 'sensor.srednie_zuzycie_o_obecnej_godzinie'
+            WHERE m.entity_id = 'sensor.srednie_zuzycie_w_obecnym_slocie_30min'
               AND s.state NOT IN ('unknown', 'unavailable', '')
               AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - {{ lookback_sec }})
-              AND HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) BETWEEN {{ h_now }} AND 21
-            GROUP BY h
-            ORDER BY h;
+              AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) * 2
+                   + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) / 30))
+                   BETWEEN {{ h_now * 2 + (m_now // 30) }} AND 43
+            GROUP BY slot
+            ORDER BY slot;
         response_variable: statystyki_wieczor
 
       - service: calendar.get_events
@@ -1424,16 +1453,16 @@ automation:
             {% set dzis = now().date() %}
             {% set plan_date = dzis %}
 
-            {# ===== URLOP: lista godzin dla dzisiejszego planu ===== #}
+            {# ===== URLOP: lista slotów (YYYY-MM-DD HH:MM) dla dzisiejszego planu ===== #}
             {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
             {% set urlop_ns = namespace(hours=[]) %}
             {% for ev in urlop_list %}
               {% set es = as_datetime(ev.start) | as_local %}
               {% set ee = as_datetime(ev.end) | as_local %}
-              {% for off in range(0, 24) %}
-                {% set probe = now().replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+              {% for off in range(0, 48) %}
+                {% set probe = now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=off*30) %}
                 {% if probe >= es and probe < ee %}
-                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H:%M') %}
                   {% if hk not in urlop_ns.hours %}
                     {% set urlop_ns.hours = urlop_ns.hours + [hk] %}
                   {% endif %}
@@ -1442,16 +1471,16 @@ automation:
             {% endfor %}
             {% set urlop_hours = urlop_ns.hours %}
 
-            {# ===== SPRZATANIE: lista godzin dla dzisiejszego planu ===== #}
+            {# ===== SPRZATANIE: lista slotów (YYYY-MM-DD HH:MM) dla dzisiejszego planu ===== #}
             {% set sprzatanie_list = (sprzatanie_events['calendar.sprzatanie'].events if (sprzatanie_events and 'calendar.sprzatanie' in sprzatanie_events) else []) %}
             {% set sprzatanie_ns = namespace(hours=[]) %}
             {% for ev in sprzatanie_list %}
               {% set es = as_datetime(ev.start) | as_local %}
               {% set ee = as_datetime(ev.end) | as_local %}
-              {% for off in range(0, 24) %}
-                {% set probe = now().replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+              {% for off in range(0, 48) %}
+                {% set probe = now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=off*30) %}
                 {% if probe >= es and probe < ee %}
-                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H:%M') %}
                   {% if hk not in sprzatanie_ns.hours %}
                     {% set sprzatanie_ns.hours = sprzatanie_ns.hours + [hk] %}
                   {% endif %}
@@ -1488,28 +1517,26 @@ automation:
             {% set rows = statystyki_wieczor['result'] if (statystyki_wieczor is mapping and 'result' in statystyki_wieczor) else [] %}
             {% set nsC = namespace(d={}) %}
             {% for row in rows %}
-              {% set nsC.d = nsC.d | combine({ (row['h'] | int): (row['avg_h'] | float(0)) }) %}
+              {% set nsC.d = nsC.d | combine({ (row['slot'] | int): (row['avg_h'] | float(0)) }) %}
             {% endfor %}
             {% set dict_z = nsC.d %}
   
-            {# --- PV dict 15-22: preferuj hourly, fallback do detailedForecast --- #}
-            {% set hourly_list = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedHourly') or [] %}
-            {% set halfhour_list = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedForecast') or [] %}
-            {% set forecast_data = hourly_list if (hourly_list | count) > 0 else halfhour_list %}
-            {% set forecast_source = 'detailedHourly' if (hourly_list | count) > 0 else 'detailedForecast' %}
-  
+            {# --- PV dict 15-22: słownik slot→kWh (sloty 30-min, klucze 30..43) --- #}
+            {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedForecast') or [] %}
+
             {% set nsP = namespace(d={}) %}
             {% if forecast_data is iterable %}
               {% for item in forecast_data %}
                 {% if item is mapping %}
                   {% set ps = item.get('period_start', item.get('datetime', '')) | string %}
-                  {% if ps | length >= 13 %}
+                  {% if ps | length >= 16 %}
                     {% set ts_date = ps[0:10] %}
                     {% set ts_hour = ps[11:13] | int(-1) %}
+                    {% set ts_min = ps[14:16] | int(0) %}
                     {% if ts_date == (dzis | string) and ts_hour >= 15 and ts_hour < 22 %}
+                      {% set s_it = ts_hour * 2 + (ts_min // 30) %}
                       {% set pv_value = item.get('pv_estimate', item.get('pv_forecast', 0)) | float(0) %}
-                      {% set prev = nsP.d.get(ts_hour, 0) | float(0) %}
-                      {% set nsP.d = nsP.d | combine({ ts_hour: (prev + pv_value) }) %}
+                      {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                     {% endif %}
                   {% endif %}
                 {% endif %}
@@ -1518,9 +1545,8 @@ automation:
             {% set pv_d = nsP.d %}
             {% set pv_count = pv_d | length %}
             {% set pv_hours_debug =
-              'src=' ~ forecast_source ~
-              ' | hourly_len=' ~ (hourly_list | list | count) ~
-              ' | half_len=' ~ (halfhour_list | list | count) ~
+              'src=detailedForecast' ~
+              ' | fc_len=' ~ (forecast_data | list | count) ~
               ' | pv_count=' ~ pv_count ~
               ' | dzis=' ~ dzis ~
               ' | pv_d=' ~ pv_d %}
@@ -1544,24 +1570,28 @@ automation:
               {% set E_reserve_u = max_u %}
             {% endif %}
   
+            {# --- zmienne slotowe --- #}
+            {% set cons_default_slot = cons_default | float(1.5) / 2 %}
+            {% set urlop_kwh_slot = urlop_kwh_h | float(0.5) / 2 %}
+            {% set s_now = h_now * 2 + (m_now // 30) %}
+            {% set current_slot_factor = ((1800 - (m_now % 30 * 60 + now().second)) / 1800) | float(0) %}
+
             {# --- zapotrzebowanie domu od teraz do 22:00 --- #}
-            {% set current_hour_factor = ((60 - m_now) / 60) | float(0) %}
-  
             {% set ns_cons = namespace(total=0.0) %}
-            {% for h in range(h_now, 22) %}
-              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+            {% for s in range(s_now, 44) %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(s // 2, (s % 2) * 30) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
-              {% set factor = current_hour_factor if h == h_now else 1 %}
+              {% set z_h = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
+              {% set factor = current_slot_factor if s == s_now else 1 %}
               {% set ns_cons.total = ns_cons.total + (z_h * factor) %}
             {% endfor %}
             {% set calkowite_zuzycie_kwh = ns_cons.total %}
-  
+
             {% set ns_pv_sum = namespace(total=0.0) %}
-            {% for h in range(h_now, 22) %}
-              {% set pv_h = pv_d.get(h, 0) %}
-              {% set factor = current_hour_factor if h == h_now else 1 %}
+            {% for s in range(s_now, 44) %}
+              {% set pv_h = pv_d.get(s, 0) %}
+              {% set factor = current_slot_factor if s == s_now else 1 %}
               {% set ns_pv_sum.total = ns_pv_sum.total + (pv_h * factor) %}
             {% endfor %}
             {% set calkowite_pv_kwh = ns_pv_sum.total %}
@@ -1597,8 +1627,16 @@ automation:
                  (po zakończeniu slotu zostaje dokładnie tyle ile potrzebne na resztę godziny) #}
             {% set slot_end_min = slot_start_min + 15 %}
             {% set mins_rest_of_hour = 60 - slot_end_min %}
-            {% set z_h_eoh = dict_z.get(h_now, cons_default) * cons_mult %}
-            {% set pv_h_eoh = pv_d.get(h_now, 0) %}
+            {% set ns_zh_eoh = namespace(v=0.0) %}
+            {% for s_eoh in [h_now * 2, h_now * 2 + 1] %}
+              {% set hk_eoh = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(h_now, (s_eoh % 2) * 30) %}
+              {% set is_urlop_eoh = hk_eoh in urlop_hours %}
+              {% set is_sprz_eoh = hk_eoh in sprzatanie_hours %}
+              {% set z_eoh_s = (dict_z.get(s_eoh, cons_default_slot)) * sprzatanie_mult if is_sprz_eoh else (urlop_kwh_slot if is_urlop_eoh else (dict_z.get(s_eoh, cons_default_slot)) * cons_mult) %}
+              {% set ns_zh_eoh.v = ns_zh_eoh.v + z_eoh_s %}
+            {% endfor %}
+            {% set z_h_eoh = ns_zh_eoh.v %}
+            {% set pv_h_eoh = pv_d.get(h_now * 2, 0) + pv_d.get(h_now * 2 + 1, 0) %}
             {% set house_kwh_this_slot = [z_h_eoh * 15 / 60 - pv_h_eoh * 15 / 60, 0] | max %}
             {% set reserve_do_konca_godziny_kwh = [z_h_eoh * mins_rest_of_hour / 60 - pv_h_eoh * mins_rest_of_hour / 60, 0] | max %}
             {% set sellable_full_now = [sellable_full_now - reserve_do_konca_godziny_kwh - house_kwh_this_slot, 0] | max %}
@@ -1624,11 +1662,14 @@ automation:
                     {% set st = h * 60 + m %}
                     {% set price_kwh = (c.rce_pln | float(0)) / 1000 %}
                     {% if h >= 15 and h < 22 and st >= slot_start_total and price_kwh >= prog_czesciowy %}
-                      {% set pv_h = pv_d.get(h, 0) %}
-                      {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
-              {% set is_urlop_h = hk in urlop_hours %}
-              {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+                      {% set pv_h = pv_d.get(h*2, 0) + pv_d.get(h*2+1, 0) %}
+                      {% set hk0 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:00'|format(h) %}
+                      {% set hk1 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:30'|format(h) %}
+              {% set is_urlop_h = hk0 in urlop_hours or hk1 in urlop_hours %}
+              {% set is_sprzatanie_h = hk0 in sprzatanie_hours or hk1 in sprzatanie_hours %}
+              {% set z_h0 = (dict_z.get(h*2, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2, cons_default_slot)) * cons_mult) %}
+              {% set z_h1 = (dict_z.get(h*2+1, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2+1, cons_default_slot)) * cons_mult) %}
+              {% set z_h = z_h0 + z_h1 %}
                       {% set base_delta_slot = (pv_h - z_h) / 4 %}
                       {% if price_kwh >= prog_pelny %}
                         {% set ns.full = ns.full + [{
@@ -2063,7 +2104,7 @@ automation:
     condition:
       - condition: template
         value_template: >
-          {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_jutro', 'detailedHourly') or [] %}
+          {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_jutro', 'detailedForecast') or [] %}
           {{ forecast_data | length > 0 }}
   
     action:
@@ -2101,16 +2142,19 @@ automation:
         data:
           query: >
             SELECT
-              HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) AS h,
+              (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) * 2
+               + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) / 30)) AS slot,
               AVG(CAST(s.state AS DECIMAL(10,3))) AS avg_h
             FROM states s
             JOIN states_meta m ON s.metadata_id = m.metadata_id
-            WHERE m.entity_id = 'sensor.srednie_zuzycie_o_obecnej_godzinie'
+            WHERE m.entity_id = 'sensor.srednie_zuzycie_w_obecnym_slocie_30min'
               AND s.state NOT IN ('unknown', 'unavailable', '')
               AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - {{ lookback_sec }})
-              AND HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) BETWEEN 6 AND 13
-            GROUP BY h
-            ORDER BY h;
+              AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) * 2
+                   + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) / 30))
+                   BETWEEN 12 AND 27
+            GROUP BY slot
+            ORDER BY slot;
         response_variable: statystyki_rano
 
       - service: calendar.get_events
@@ -2131,18 +2175,18 @@ automation:
 
       - variables:
           pack: >-
-            {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_jutro', 'detailedHourly') or [] %}
+            {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_jutro', 'detailedForecast') or [] %}
 
-            {# ===== URLOP: lista godzin (YYYY-MM-DD HH) dla JUTRZEJSZEGO planu ===== #}
+            {# ===== URLOP: lista slotów (YYYY-MM-DD HH:MM) dla JUTRZEJSZEGO planu ===== #}
             {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
             {% set urlop_ns = namespace(hours=[]) %}
             {% for ev in urlop_list %}
               {% set es = as_datetime(ev.start) | as_local %}
               {% set ee = as_datetime(ev.end) | as_local %}
-              {% for off in range(0, 24) %}
-                {% set probe = (now() + timedelta(days=1)).replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+              {% for off in range(0, 48) %}
+                {% set probe = (now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=off*30) %}
                 {% if probe >= es and probe < ee %}
-                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H:%M') %}
                   {% if hk not in urlop_ns.hours %}
                     {% set urlop_ns.hours = urlop_ns.hours + [hk] %}
                   {% endif %}
@@ -2151,16 +2195,16 @@ automation:
             {% endfor %}
             {% set urlop_hours = urlop_ns.hours %}
 
-            {# ===== SPRZATANIE: lista godzin (YYYY-MM-DD HH) dla JUTRZEJSZEGO planu ===== #}
+            {# ===== SPRZATANIE: lista slotów (YYYY-MM-DD HH:MM) dla JUTRZEJSZEGO planu ===== #}
             {% set sprzatanie_list = (sprzatanie_events['calendar.sprzatanie'].events if (sprzatanie_events and 'calendar.sprzatanie' in sprzatanie_events) else []) %}
             {% set sprzatanie_ns = namespace(hours=[]) %}
             {% for ev in sprzatanie_list %}
               {% set es = as_datetime(ev.start) | as_local %}
               {% set ee = as_datetime(ev.end) | as_local %}
-              {% for off in range(0, 24) %}
-                {% set probe = (now() + timedelta(days=1)).replace(hour=0, minute=30, second=0, microsecond=0) + timedelta(hours=off) %}
+              {% for off in range(0, 48) %}
+                {% set probe = (now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=off*30) %}
                 {% if probe >= es and probe < ee %}
-                  {% set hk = probe.strftime('%Y-%m-%d %H') %}
+                  {% set hk = probe.strftime('%Y-%m-%d %H:%M') %}
                   {% if hk not in sprzatanie_ns.hours %}
                     {% set sprzatanie_ns.hours = sprzatanie_ns.hours + [hk] %}
                   {% endif %}
@@ -2173,23 +2217,28 @@ automation:
             {% set rows = statystyki_rano['result'] if (statystyki_rano is mapping and 'result' in statystyki_rano) else [] %}
             {% set nsC = namespace(d={}) %}
             {% for row in rows %}
-              {% set nsC.d = nsC.d | combine({ (row['h']|int): (row['avg_h']|float(0)) }) %}
+              {% set nsC.d = nsC.d | combine({ (row['slot']|int): (row['avg_h']|float(0)) }) %}
             {% endfor %}
             {% set dict_z = nsC.d %}
-  
-            {# --- PV dict jutro 06-13 --- #}
+
+            {# --- zmienne slotowe --- #}
+            {% set cons_default_slot = cons_default | float(1.5) / 2 %}
+            {% set urlop_kwh_slot = urlop_kwh_h | float(0.5) / 2 %}
+
+            {# --- PV dict jutro 06-13: słownik slot→kWh (sloty 30-min, klucze 12..27) --- #}
             {% set jutro = (now() + timedelta(days=1)).date() %}
             {% set plan_date = jutro %}
             {% set nsP = namespace(d={}, count=0, debug='') %}
             {% set nsP.debug = "jutro:" ~ jutro ~ "|len:" ~ (forecast_data | length if forecast_data else 0) %}
-  
+
             {% if forecast_data is iterable and forecast_data is not string and forecast_data | length > 0 %}
               {% for item in forecast_data %}
                 {% if item is mapping %}
                   {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
-                  {% if ts.date() == jutro and ts.hour >= 6 and ts.hour <= 21 %}
+                  {% if ts.date() == jutro and ts.hour >= 6 and ts.hour < 14 %}
+                    {% set s_it = ts.hour * 2 + (ts.minute // 30) %}
                     {% set pv_value = (item.pv_estimate or item.pv_forecast or 0) | float(0) %}
-                    {% set nsP.d = nsP.d | combine({ ts.hour: pv_value }) %}
+                    {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                     {% set nsP.count = nsP.count + 1 %}
                   {% endif %}
                 {% endif %}
@@ -2197,17 +2246,17 @@ automation:
             {% else %}
               {% set nsP.debug = nsP.debug ~ "|EMPTY_OR_STRING" %}
             {% endif %}
-  
+
             {% set pv_d = nsP.d %}
             {% set pv_debug = "parsed:" ~ nsP.count ~ "|" ~ nsP.debug ~ "|pv_d:" ~ pv_d %}
 
-            {# --- koniec produkcji PV wg prognozy (spill liczony do pv_end_excl, fallback 14) --- #}
-            {% set nsE = namespace(last=13) %}
-            {% for h in range(0, 24) %}
-              {% if pv_d.get(h, 0) > 0.1 %}{% set nsE.last = h %}{% endif %}
+            {# --- koniec produkcji PV wg prognozy (spill liczony do pv_end_slot_excl, fallback slot 28=14:00) --- #}
+            {% set nsE = namespace(last=27) %}
+            {% for s in range(0, 48) %}
+              {% if pv_d.get(s, 0) > 0.1 %}{% set nsE.last = s %}{% endif %}
             {% endfor %}
-            {% set pv_end_excl = nsE.last + 1 %}
-            {% if pv_end_excl < 14 %}{% set pv_end_excl = 14 %}{% endif %}
+            {% set pv_end_slot_excl = nsE.last + 1 %}
+            {% if pv_end_slot_excl < 28 %}{% set pv_end_slot_excl = 28 %}{% endif %}
   
             {# --- rezerwa komfortowa --- #}
             {% set floor_kwh = (pojemnosc_kwh * soc_floor_pct / 100) %}
@@ -2217,18 +2266,18 @@ automation:
   
             {# --- jutrzejsze min SOC do 13:00 --- #}
             {% set ns_cons = namespace(total=0.0) %}
-            {% for h in range(6, 14) %}
-              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+            {% for s in range(12, 28) %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(s // 2, (s % 2) * 30) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+              {% set z_h = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
               {% set ns_cons.total = ns_cons.total + z_h %}
             {% endfor %}
             {% set total_cons_6_13 = ns_cons.total %}
-  
+
             {% set ns_pv_sum = namespace(total=0.0) %}
-            {% for h in range(6, 14) %}
-              {% set pv_h = pv_d.get(h, 0) %}
+            {% for s in range(12, 28) %}
+              {% set pv_h = pv_d.get(s, 0) %}
               {% set ns_pv_sum.total = ns_pv_sum.total + pv_h %}
             {% endfor %}
             {% set total_pv_sum_6_13 = ns_pv_sum.total %}
@@ -2247,29 +2296,29 @@ automation:
             {# --- prawdziwy spill od bieżącego SOC: overflow magazynu >100% --- #}
             {% set nsSpill = namespace(
               will=false,
-              start_h=13,
+              start_s=28,
               lines='',
               batt_kwh=((soc_teraz / 100) * pojemnosc_kwh)
             ) %}
-  
-            {% for h in range(6, pv_end_excl) %}
-              {% set pv_h = pv_d.get(h, 0) %}
-              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+
+            {% for s in range(12, pv_end_slot_excl) %}
+              {% set pv_h = pv_d.get(s, 0) %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(s // 2, (s % 2) * 30) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+              {% set z_h = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
               {% set net_h = pv_h - z_h %}
               {% set batt_before = nsSpill.batt_kwh %}
               {% set batt_after_raw = batt_before + net_h %}
-  
+
               {% if batt_after_raw > pojemnosc_kwh %}
                 {% set spill_h = batt_after_raw - pojemnosc_kwh %}
                 {% if not nsSpill.will %}
                   {% set nsSpill.will = true %}
-                  {% set nsSpill.start_h = h %}
+                  {% set nsSpill.start_s = s %}
                 {% endif %}
                 {% set nsSpill.lines = nsSpill.lines ~
-                  "\n- h" ~ h ~
+                  "\n- s" ~ s ~ "(" ~ ('%02d:%02d'|format(s//2,(s%2)*30)) ~ ")" ~
                   " | batt_before:" ~ (batt_before|round(2)) ~
                   " | pv:" ~ (pv_h|round(2)) ~
                   " | cons:" ~ (z_h|round(2)) ~
@@ -2284,22 +2333,22 @@ automation:
               {% endif %}
             {% endfor %}
             {% set will_spill = nsSpill.will %}
-            {% set spill_start_hour = nsSpill.start_h %}
+            {% set spill_start_slot = nsSpill.start_s %}
   
-            {# --- energia potrzebna by przetrwać od 06:00 do spill_start_hour lub do 13:00 --- #}
-            {% set survive_to_hour = spill_start_hour if will_spill else 13 %}
+            {# --- energia potrzebna by przetrwać od 06:00 do spill_start_slot lub do 14:00 (slot 28) --- #}
+            {% set survive_to_slot = spill_start_slot if will_spill else 28 %}
             {% set nsSurvive = namespace(total=0.0, lines='') %}
-            {% for h in range(6, survive_to_hour) %}
-              {% set pv_h = pv_d.get(h, 0) %}
-              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
+            {% for s in range(12, survive_to_slot) %}
+              {% set pv_h = pv_d.get(s, 0) %}
+              {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(s // 2, (s % 2) * 30) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+              {% set z_h = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
               {% set batt_h = z_h - pv_h %}
               {% if batt_h < 0 %}{% set batt_h = 0 %}{% endif %}
               {% set nsSurvive.total = nsSurvive.total + batt_h %}
               {% set nsSurvive.lines = nsSurvive.lines ~
-                "\n- h" ~ h ~
+                "\n- s" ~ s ~ "(" ~ ('%02d:%02d'|format(s//2,(s%2)*30)) ~ ")" ~
                 " | cons:" ~ (z_h|round(2)) ~
                 " | pv:" ~ (pv_h|round(2)) ~
                 " | batt:" ~ (batt_h|round(2))
@@ -2334,11 +2383,14 @@ automation:
                     {% set price_kwh = price_mwh / 1000 %}
   
                     {% if h >= 6 and h < 13 %}
-                      {% set pv_h = pv_d.get(h, 0) %}
-                      {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d'|format(h) %}
-              {% set is_urlop_h = hk in urlop_hours %}
-              {% set is_sprzatanie_h = hk in sprzatanie_hours %}
-              {% set z_h = (dict_z.get(h, cons_default)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_h if is_urlop_h else (dict_z.get(h, cons_default)) * cons_mult) %}
+                      {% set pv_h = pv_d.get(h*2, 0) + pv_d.get(h*2+1, 0) %}
+                      {% set hk0 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:00'|format(h) %}
+                      {% set hk1 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:30'|format(h) %}
+              {% set is_urlop_h = hk0 in urlop_hours or hk1 in urlop_hours %}
+              {% set is_sprzatanie_h = hk0 in sprzatanie_hours or hk1 in sprzatanie_hours %}
+              {% set z_h0 = (dict_z.get(h*2, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2, cons_default_slot)) * cons_mult) %}
+              {% set z_h1 = (dict_z.get(h*2+1, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(h*2+1, cons_default_slot)) * cons_mult) %}
+              {% set z_h = z_h0 + z_h1 %}
                       {% set pv_slot_energy = (pv_h - z_h) / 4 %}
                       {% if pv_slot_energy < 0 %}{% set pv_slot_energy = 0 %}{% endif %}
   
@@ -2439,12 +2491,12 @@ automation:
             {# automat blokady: nie ustawiaj powyżej aktualnego SOC #}
             {% set limit_soc = [booked_soc, (soc_teraz | int)] | min %}
   
-            {{ mode }}###{{ will_spill }}###{{ spill_start_hour }}###{{ has_good_price_slots }}###{{ good_slot_count }}###{{ partial_bat_min_price|round(3) }}###{{ full_bat_min_price|round(3) }}###{{ survival_energy|round(2) }}###{{ reserve_kwh|round(2) }}###{{ export_energy_needed|round(2) }}###{{ booked_energy|round(2) }}###{{ booked_soc }}###{{ limit_soc }}###{{ good_lines }}###{{ nsSurvive.lines }}###{{ nsSpill.lines }}###{{ soc_min_dynamic_13_tomorrow }}###{{ soc_mid_stop_tomorrow }}###{{ battery_budget_high|round(2) }}###{{ pv_debug }}
+            {{ mode }}###{{ will_spill }}###{{ spill_start_slot }}###{{ has_good_price_slots }}###{{ good_slot_count }}###{{ partial_bat_min_price|round(3) }}###{{ full_bat_min_price|round(3) }}###{{ survival_energy|round(2) }}###{{ reserve_kwh|round(2) }}###{{ export_energy_needed|round(2) }}###{{ booked_energy|round(2) }}###{{ booked_soc }}###{{ limit_soc }}###{{ good_lines }}###{{ nsSurvive.lines }}###{{ nsSpill.lines }}###{{ soc_min_dynamic_13_tomorrow }}###{{ soc_mid_stop_tomorrow }}###{{ battery_budget_high|round(2) }}###{{ pv_debug }}
   
       - variables:
           mode_dbg: "{{ pack.split('###')[0] }}"
           will_spill: "{{ pack.split('###')[1] == 'True' }}"
-          spill_start_hour: "{{ pack.split('###')[2] | int(13) }}"
+          spill_start_slot: "{{ pack.split('###')[2] | int(28) }}"
           has_good_price_slots: "{{ pack.split('###')[3] == 'True' }}"
           good_slot_count: "{{ pack.split('###')[4] | int(0) }}"
           partial_bat_min_price_dbg: "{{ pack.split('###')[5] | float(0) }}"
@@ -2471,7 +2523,7 @@ automation:
             | soc_now={{ soc_teraz | round(1) }}%
             | mode={{ mode_dbg }}
             | will_spill={{ 'YES' if will_spill else 'NO' }}
-            | spill_start={{ spill_start_hour }}
+            | spill_start_slot={{ spill_start_slot }}
             | good_slots={{ 'YES' if has_good_price_slots else 'NO' }} count={{ good_slot_count }}
             | partial_bat_min={{ partial_bat_min_price_dbg }}
             | full_bat_min={{ full_bat_min_price_dbg }}
@@ -2533,7 +2585,7 @@ automation:
                     Tryb: {{ mode_dbg }}
   
                     Jutro spill: {{ 'TAK' if will_spill else 'NIE' }}
-                    Start spillu: {{ '%02d:00' | format(spill_start_hour) if will_spill else 'brak' }}
+                    Start spillu: {{ '%02d:%02d' | format(spill_start_slot // 2, (spill_start_slot % 2) * 30) if will_spill else 'brak' }}
   
                     Użyteczne sloty cenowe rano: {{ 'TAK' if has_good_price_slots else 'NIE' }}
                     Liczba slotów: {{ good_slot_count }}
