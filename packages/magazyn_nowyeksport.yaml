@@ -259,7 +259,7 @@ automation:
                   {% set ts = item.period_start %}
                   {% set s_it = ts.hour * 2 + (ts.minute // 30) %}
                   {% if ts.date() == dzis_local and ts.hour >= 6 and ts.hour <= 21 %}
-                    {% set pv_value = item.pv_estimate | float(0) %}
+                    {% set pv_value = item.pv_estimate | float(0) / 2 %}
                     {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                   {% endif %}
                 {% endif %}
@@ -673,7 +673,7 @@ automation:
             {% set pv_power_5m_w = states('sensor.srednia_moc_z_pv_5_minut') | float(0) %}
             {% set house_power_5m_w = states('sensor.srednia_moc_pobierana_przez_dom_2_5_minut') | float(0) %}
             {% if house_power_5m_w < 0 %}{% set house_power_5m_w = 0 %}{% endif %}
-            {% set pv_surplus_min_w = house_power_5m_w * 1.25 %}
+            {% set pv_surplus_min_w = house_power_5m_w * 1.0 %}
             {% set pv_surplus_5m_ok = (pv_power_5m_w >= pv_surplus_min_w) %}
 
             {% set pv_can_export_now = (cena_aktualna_kwh >= spill_pv_min_price and pv_surplus_5m_ok) %}
@@ -1253,7 +1253,7 @@ automation:
 
       - variables:
           house_power_5m_w: "{{ [house_power_5m_w, 0] | max }}"
-          pv_surplus_min_w: "{{ house_power_5m_w * 1.25 }}"
+          pv_surplus_min_w: "{{ house_power_5m_w * 1.0 }}"
           pv_surplus_5m_ok: "{{ pv_power_5m_w >= pv_surplus_min_w }}"
 
       - choose:
@@ -1535,7 +1535,7 @@ automation:
                     {% set ts_min = ps[14:16] | int(0) %}
                     {% if ts_date == (dzis | string) and ts_hour >= 15 and ts_hour < 22 %}
                       {% set s_it = ts_hour * 2 + (ts_min // 30) %}
-                      {% set pv_value = item.get('pv_estimate', item.get('pv_forecast', 0)) | float(0) %}
+                      {% set pv_value = item.get('pv_estimate', item.get('pv_forecast', 0)) | float(0) / 2 %}
                       {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                     {% endif %}
                   {% endif %}
@@ -2237,7 +2237,7 @@ automation:
                   {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
                   {% if ts.date() == jutro and ts.hour >= 6 and ts.hour < 14 %}
                     {% set s_it = ts.hour * 2 + (ts.minute // 30) %}
-                    {% set pv_value = (item.pv_estimate or item.pv_forecast or 0) | float(0) %}
+                    {% set pv_value = (item.pv_estimate or item.pv_forecast or 0) | float(0) / 2 %}
                     {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                     {% set nsP.count = nsP.count + 1 %}
                   {% endif %}

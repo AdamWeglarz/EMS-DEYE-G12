@@ -1033,7 +1033,7 @@ automation:
           {% for item in forecast_data %}
             {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
             {% if ts.date() == dzis %}
-              {% set pv_it = (item.pv_estimate or item.pv_forecast or 0) | float %}
+              {% set pv_it = (item.pv_estimate or item.pv_forecast or 0) | float / 2 %}
               {% set s_it = ts.hour * 2 + (ts.minute // 30) %}
               {% if pv_it > 0.1 and s_it > nsE.last %}{% set nsE.last = s_it %}{% endif %}
             {% endif %}
@@ -1087,7 +1087,7 @@ automation:
             {% for item in forecast_data %}
               {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
               {% if ts.date() == dzis and ts.hour == h and ts.minute == m %}
-                {% set pv_s.v = (item.pv_estimate or item.pv_forecast or 0) | float %}
+                {% set pv_s.v = (item.pv_estimate or item.pv_forecast or 0) | float / 2 %}
               {% endif %}
             {% endfor %}
 
@@ -1773,7 +1773,7 @@ automation:
             {% for item in forecast_data %}
               {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
               {% if ts.date() == dzis and ts.hour == h and ts.minute == m %}
-                {% set pv_s.v = (item.pv_estimate or item.pv_forecast or 0) | float %}
+                {% set pv_s.v = (item.pv_estimate or item.pv_forecast or 0) | float / 2 %}
               {% endif %}
             {% endfor %}
 
@@ -1973,7 +1973,7 @@ automation:
                 {% for item in forecast_data %}
                   {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
                   {% if ts.date() == dzis and ts.hour == h and ts.minute == m %}
-                    {% set ns_pv_h.v = ns_pv_h.v + ((item.pv_estimate or item.pv_forecast or 0) | float) %}
+                    {% set ns_pv_h.v = ns_pv_h.v + ((item.pv_estimate or item.pv_forecast or 0) | float / 2) %}
                   {% endif %}
                 {% endfor %}
               {% endfor %}
@@ -2159,7 +2159,7 @@ automation:
             {% for item in forecast_data %}
               {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
               {% if ts.date() == dzis and ts.hour == h and ts.minute == m %}
-                {% set pv_s.v = (item.pv_estimate or item.pv_forecast or 0) | float %}
+                {% set pv_s.v = (item.pv_estimate or item.pv_forecast or 0) | float / 2 %}
               {% endif %}
             {% endfor %}
 

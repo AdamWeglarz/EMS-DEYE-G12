@@ -363,6 +363,8 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 - `cons_default_slot` = `cons_default / 2`; `urlop_kwh_slot` = `urlop_kwh_h / 2`; `current_slot_factor` dla bieżącego slotu
 - `pv_end_slot_excl` (domyślnie 28 = 14:00), `spill_start_slot` zamiast `spill_start_hour`
 - Naprawiono `TypeError` w oddawaniu porannym: `"%02d:%02d" % [h, m]` → `(h, m)`
+- Naprawiono przeliczanie `pv_estimate` z Solcast: wartości w kWh/h → kWh/30min (÷2) we wszystkich automatyzacjach
+- Strażnik PV: mnożnik `pv_surplus_min_w` zmieniony z 1,25 na 1,0 (eksport gdy PV ≥ zużycie, bez buforu)
 
 ### 2026-04-20
 - Dodano `sensor.solarman_total_load_consumption_safe` (trigger-based, `total_increasing`, nie spada przy reset)
