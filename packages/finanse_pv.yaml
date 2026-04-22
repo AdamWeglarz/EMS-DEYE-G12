@@ -239,6 +239,22 @@ var:
     initial_value: 0
     restore: true
 
+  finanse_cykl_import_dzien_drogi_kwh:
+    unique_id: "finanse_cykl_import_dzien_drogi_kwh"
+    friendly_name: "Cykl 6-6: import dzienny w drogiej strefie (kWh)"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_import_dzien_drogi_pln:
+    unique_id: "finanse_cykl_import_dzien_drogi_pln"
+    friendly_name: "Cykl 6-6: koszt importu dziennego w drogiej strefie (PLN)"
+    icon: "mdi:cash-remove"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
   # ── Poprzedni cykl (zapisywane o 06:00) ───────────────────────────────────
 
   finanse_cykl_prev_eksport_tanio_kwh:
@@ -285,6 +301,22 @@ var:
     unique_id: "finanse_cykl_prev_eksport_dobry_pln"
     friendly_name: "Poprzedni cykl: przychód dobrego eksportu (PLN)"
     icon: "mdi:cash-plus"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_import_dzien_drogi_kwh:
+    unique_id: "finanse_cykl_prev_import_dzien_drogi_kwh"
+    friendly_name: "Poprzedni cykl: import dzienny w drogiej strefie (kWh)"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_import_dzien_drogi_pln:
+    unique_id: "finanse_cykl_prev_import_dzien_drogi_pln"
+    friendly_name: "Poprzedni cykl: koszt importu dziennego w drogiej strefie (PLN)"
+    icon: "mdi:cash-remove"
     unit_of_measurement: "PLN"
     initial_value: 0
     restore: true
@@ -350,6 +382,22 @@ var:
   finanse_cykl_skum_eksport_dobry_pln:
     unique_id: "finanse_cykl_skum_eksport_dobry_pln"
     friendly_name: "Skum: przychód dobrego eksportu (PLN)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_import_dzien_drogi_kwh:
+    unique_id: "finanse_cykl_skum_import_dzien_drogi_kwh"
+    friendly_name: "Skum: import dzienny w drogiej strefie (kWh)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_import_dzien_drogi_pln:
+    unique_id: "finanse_cykl_skum_import_dzien_drogi_pln"
+    friendly_name: "Skum: koszt importu dziennego w drogiej strefie (PLN)"
     icon: "mdi:sigma"
     unit_of_measurement: "PLN"
     initial_value: 0
@@ -434,7 +482,8 @@ template:
         state: >
           {% set s_tanio = states('var.finanse_cykl_eksport_tanio_strata_pln') | float(0) %}
           {% set s_noc = states('var.finanse_cykl_import_noc_pln') | float(0) %}
-          {{ (s_tanio + s_noc) | round(2) }}
+          {% set s_dzien = states('var.finanse_cykl_import_dzien_drogi_pln') | float(0) %}
+          {{ (s_tanio + s_noc + s_dzien) | round(2) }}
 
       - name: "Cykl 6-6: strata małego magazynu skumulowana"
         unique_id: "finanse_cykl_strata_skum"
@@ -567,6 +616,17 @@ automation:
           slot_cykl_eksport_dobry_pln: >
             {{ (slot_cykl_eksport_dobry_kwh | float(0) * cena_sprzedazy_kwh | float(0)) | round(4) }}
 
+          # Cykl 6-6: import dzienny w drogiej strefie G12 (06-13 i 15-22, kupujemy z sieci)
+          slot_cykl_import_dzien_drogi_kwh: >
+            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% if (h >= 6 and h < 13) or (h >= 15 and h < 22) %}
+              {{ delta_bought | float(0) }}
+            {% else %}
+              0
+            {% endif %}
+          slot_cykl_import_dzien_drogi_pln: >
+            {{ (slot_cykl_import_dzien_drogi_kwh | float(0) * cena_g12_kwh | float(0)) | round(4) }}
+
       # Akumuluj do dziennych varów
       - service: var.set
         data:
@@ -629,6 +689,16 @@ automation:
           entity_id: var.finanse_cykl_eksport_dobry_pln
           value: >
             {{ (states('var.finanse_cykl_eksport_dobry_pln') | float(0) + slot_cykl_eksport_dobry_pln | float(0)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_dzien_drogi_kwh
+          value: >
+            {{ (states('var.finanse_cykl_import_dzien_drogi_kwh') | float(0) + slot_cykl_import_dzien_drogi_kwh | float(0)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_dzien_drogi_pln
+          value: >
+            {{ (states('var.finanse_cykl_import_dzien_drogi_pln') | float(0) + slot_cykl_import_dzien_drogi_pln | float(0)) | round(4) }}
 
       # Zapisz poprzednie wartości liczników i czas triggera
       - service: var.set
@@ -757,7 +827,12 @@ automation:
           import_noc_pln: "{{ states('var.finanse_cykl_import_noc_pln') | float(0) }}"
           eksport_dobry_kwh: "{{ states('var.finanse_cykl_eksport_dobry_kwh') | float(0) }}"
           eksport_dobry_pln: "{{ states('var.finanse_cykl_eksport_dobry_pln') | float(0) }}"
-          strata_laczna: "{{ states('var.finanse_cykl_eksport_tanio_strata_pln') | float(0) + states('var.finanse_cykl_import_noc_pln') | float(0) }}"
+          import_dzien_drogi_kwh: "{{ states('var.finanse_cykl_import_dzien_drogi_kwh') | float(0) }}"
+          import_dzien_drogi_pln: "{{ states('var.finanse_cykl_import_dzien_drogi_pln') | float(0) }}"
+          strata_laczna: >
+            {{ states('var.finanse_cykl_eksport_tanio_strata_pln') | float(0)
+               + states('var.finanse_cykl_import_noc_pln') | float(0)
+               + states('var.finanse_cykl_import_dzien_drogi_pln') | float(0) }}
 
       # Zapisz poprzedni cykl
       - service: var.set
@@ -784,6 +859,14 @@ automation:
         data:
           entity_id: var.finanse_cykl_prev_eksport_dobry_pln
           value: "{{ eksport_dobry_pln | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_import_dzien_drogi_kwh
+          value: "{{ import_dzien_drogi_kwh | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_import_dzien_drogi_pln
+          value: "{{ import_dzien_drogi_pln | round(4) }}"
       - service: var.set
         data:
           entity_id: var.finanse_cykl_prev_strata_laczna_pln
@@ -825,6 +908,16 @@ automation:
           entity_id: var.finanse_cykl_skum_eksport_dobry_pln
           value: >
             {{ (states('var.finanse_cykl_skum_eksport_dobry_pln') | float(0) + eksport_dobry_pln) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_import_dzien_drogi_kwh
+          value: >
+            {{ (states('var.finanse_cykl_skum_import_dzien_drogi_kwh') | float(0) + import_dzien_drogi_kwh) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_import_dzien_drogi_pln
+          value: >
+            {{ (states('var.finanse_cykl_skum_import_dzien_drogi_pln') | float(0) + import_dzien_drogi_pln) | round(4) }}
 
       # Powiadomienie
       - service: script.ems_notify
@@ -833,6 +926,7 @@ automation:
           message: >
             ❌ Eksport za tanio:  {{ eksport_tanio_kwh | round(2) }} kWh → strata {{ eksport_tanio_strata | round(2) }} PLN
             🌙 Import nocny:      {{ import_noc_kwh | round(2) }} kWh → koszt  {{ import_noc_pln | round(2) }} PLN
+            ☀️ Import dzienny (droga G12): {{ import_dzien_drogi_kwh | round(2) }} kWh → koszt {{ import_dzien_drogi_pln | round(2) }} PLN
             ──────────────────────────────
             💸 Łączna strata cyklu: {{ strata_laczna | round(2) }} PLN
             ✅ Dobry eksport:     {{ eksport_dobry_kwh | round(2) }} kWh → przychód {{ eksport_dobry_pln | round(2) }} PLN
@@ -863,4 +957,12 @@ automation:
       - service: var.set
         data:
           entity_id: var.finanse_cykl_eksport_dobry_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_dzien_drogi_kwh
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_dzien_drogi_pln
           value: 0
