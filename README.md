@@ -357,6 +357,11 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 ## Historia zmian
 
 ### 2026-04-22
+- **Straty małego magazynu — cykl 6-6** (`packages/finanse_pv.yaml`): nowe akumulatory i sensory mierzące ile pieniędzy "ucieka" przez zbyt małą pojemność baterii w cyklu 6:00→6:00
+  - `eksport_tanio`: kWh oddane przy RCE < G12_tańsza + strata PLN
+  - `import_noc`: kWh kupione 22-06 bo magazyn pusty + koszt PLN
+  - `eksport_dobry`: kWh sprzedane powyżej progu G12_tańsza + marża (informacyjnie)
+  - Warianty: bieżący cykl, poprzedni cykl (zapis 06:00), skumulowany dożywotni; reset + powiadomienie codziennie o 06:00
 - **Nowy pakiet `packages/ems_agd.yaml`** — optymalny start pralki i suszarki (Siemens BSH / Home Connect)
 - Scheduler EMS-aware: 6-13 spill PV → start gdy RCE < marża (220 PLN/MWh, slot 15-min); mała produkcja + niski SOC → o 13:00 lub wcześniej; 13-15 od razu; po 15 z spillem od razu; bez spillu o 23:30
 - Timer `input_datetime` persystuje przez restart HA (executor trigger: `time at:`)
