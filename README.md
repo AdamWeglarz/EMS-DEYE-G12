@@ -356,6 +356,15 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 
 ## Historia zmian
 
+### 2026-04-22
+- **Nowy pakiet `packages/ems_agd.yaml`** — optymalny start pralki i suszarki (Siemens BSH / Home Connect)
+- Scheduler EMS-aware: 6-13 spill PV → start gdy RCE < marża (220 PLN/MWh, slot 15-min); mała produkcja + niski SOC → o 13:00 lub wcześniej; 13-15 od razu; po 15 z spillem od razu; bez spillu o 23:30
+- Timer `input_datetime` persystuje przez restart HA (executor trigger: `time at:`)
+- Anulowanie timera gdy `remotecontrolstartallowed` → OFF
+- SOC watcher: przyspiesza start do now+1min gdy SOC ≥ cel_13 + 3% w oknie 6-13
+- `script.pralnia_mignij`: mignięcie 2s z przywróceniem stanu światła
+- Notyfikacje `script.ems_notify` przy starcie każdego urządzenia
+
 ### 2026-04-21
 - **Migracja planowania na sloty 30-min (0..47)** – wszystkie pętle RANO, POŁUDNIE, eksport poranny, eksport wieczorny i blokada nocna operują na slotach 30-minutowych zamiast godzinowych
 - SQL `GROUP BY slot = HOUR*2 + FLOOR(MINUTE/30)` we wszystkich automatyzacjach; sensor `srednie_zuzycie_w_obecnym_slocie_30min`
