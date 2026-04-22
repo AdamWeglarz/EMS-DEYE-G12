@@ -189,6 +189,172 @@ var:
     initial_value: 0
     restore: true
 
+  # ── Cykl 6:00→6:00: straty małego magazynu ────────────────────────────────
+
+  finanse_cykl_eksport_tanio_kwh:
+    unique_id: "finanse_cykl_eksport_tanio_kwh"
+    friendly_name: "Cykl 6-6: eksport za tanio (kWh)"
+    icon: "mdi:arrow-up-bold-circle-outline"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_eksport_tanio_strata_pln:
+    unique_id: "finanse_cykl_eksport_tanio_strata_pln"
+    friendly_name: "Cykl 6-6: strata eksportu za tanio (PLN)"
+    icon: "mdi:cash-remove"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_import_noc_kwh:
+    unique_id: "finanse_cykl_import_noc_kwh"
+    friendly_name: "Cykl 6-6: import nocny 22-06 (kWh)"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_import_noc_pln:
+    unique_id: "finanse_cykl_import_noc_pln"
+    friendly_name: "Cykl 6-6: koszt importu nocnego (PLN)"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_eksport_dobry_kwh:
+    unique_id: "finanse_cykl_eksport_dobry_kwh"
+    friendly_name: "Cykl 6-6: dobry eksport (kWh)"
+    icon: "mdi:cash-plus"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_eksport_dobry_pln:
+    unique_id: "finanse_cykl_eksport_dobry_pln"
+    friendly_name: "Cykl 6-6: przychód dobrego eksportu (PLN)"
+    icon: "mdi:cash-plus"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  # ── Poprzedni cykl (zapisywane o 06:00) ───────────────────────────────────
+
+  finanse_cykl_prev_eksport_tanio_kwh:
+    unique_id: "finanse_cykl_prev_eksport_tanio_kwh"
+    friendly_name: "Poprzedni cykl: eksport za tanio (kWh)"
+    icon: "mdi:arrow-up-bold-circle-outline"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_eksport_tanio_strata_pln:
+    unique_id: "finanse_cykl_prev_eksport_tanio_strata_pln"
+    friendly_name: "Poprzedni cykl: strata eksportu za tanio (PLN)"
+    icon: "mdi:cash-remove"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_import_noc_kwh:
+    unique_id: "finanse_cykl_prev_import_noc_kwh"
+    friendly_name: "Poprzedni cykl: import nocny (kWh)"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_import_noc_pln:
+    unique_id: "finanse_cykl_prev_import_noc_pln"
+    friendly_name: "Poprzedni cykl: koszt importu nocnego (PLN)"
+    icon: "mdi:transmission-tower-import"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_eksport_dobry_kwh:
+    unique_id: "finanse_cykl_prev_eksport_dobry_kwh"
+    friendly_name: "Poprzedni cykl: dobry eksport (kWh)"
+    icon: "mdi:cash-plus"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_eksport_dobry_pln:
+    unique_id: "finanse_cykl_prev_eksport_dobry_pln"
+    friendly_name: "Poprzedni cykl: przychód dobrego eksportu (PLN)"
+    icon: "mdi:cash-plus"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_prev_strata_laczna_pln:
+    unique_id: "finanse_cykl_prev_strata_laczna_pln"
+    friendly_name: "Poprzedni cykl: łączna strata małego magazynu (PLN)"
+    icon: "mdi:alert-circle-outline"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  # ── Skumulowane dożywotnie ─────────────────────────────────────────────────
+
+  finanse_cykl_skum_eksport_tanio_kwh:
+    unique_id: "finanse_cykl_skum_eksport_tanio_kwh"
+    friendly_name: "Skum: eksport za tanio (kWh)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_eksport_tanio_strata_pln:
+    unique_id: "finanse_cykl_skum_eksport_tanio_strata_pln"
+    friendly_name: "Skum: strata eksportu za tanio (PLN)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_import_noc_kwh:
+    unique_id: "finanse_cykl_skum_import_noc_kwh"
+    friendly_name: "Skum: import nocny (kWh)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_import_noc_pln:
+    unique_id: "finanse_cykl_skum_import_noc_pln"
+    friendly_name: "Skum: koszt importu nocnego (PLN)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_strata_laczna_pln:
+    unique_id: "finanse_cykl_skum_strata_laczna_pln"
+    friendly_name: "Skum: łączna strata małego magazynu (PLN)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_eksport_dobry_kwh:
+    unique_id: "finanse_cykl_skum_eksport_dobry_kwh"
+    friendly_name: "Skum: dobry eksport (kWh)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  finanse_cykl_skum_eksport_dobry_pln:
+    unique_id: "finanse_cykl_skum_eksport_dobry_pln"
+    friendly_name: "Skum: przychód dobrego eksportu (PLN)"
+    icon: "mdi:sigma"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
 # ── Template sensors (live, bez var) ──────────────────────────────────────────
 
 template:
@@ -261,6 +427,24 @@ template:
           {% set dzis = states('sensor.finanse_zysk_sprzedazy_dzis') | float(0) %}
           {{ (skum + offset + dzis) | round(2) }}
 
+      - name: "Cykl 6-6: strata małego magazynu dziś"
+        unique_id: "finanse_cykl_strata_laczna_dzis"
+        unit_of_measurement: "PLN"
+        icon: mdi:battery-alert-variant-outline
+        state: >
+          {% set s_tanio = states('var.finanse_cykl_eksport_tanio_strata_pln') | float(0) %}
+          {% set s_noc = states('var.finanse_cykl_import_noc_pln') | float(0) %}
+          {{ (s_tanio + s_noc) | round(2) }}
+
+      - name: "Cykl 6-6: strata małego magazynu skumulowana"
+        unique_id: "finanse_cykl_strata_skum"
+        unit_of_measurement: "PLN"
+        icon: mdi:sigma
+        state: >
+          {% set skum = states('var.finanse_cykl_skum_strata_laczna_pln') | float(0) %}
+          {% set dzis = states('sensor.cykl_6_6_strata_malego_magazynu_dzis') | float(0) %}
+          {{ (skum + dzis) | round(2) }}
+
 # ── Automatyzacje ──────────────────────────────────────────────────────────────
 
 automation:
@@ -326,6 +510,8 @@ automation:
               {{ states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) }}
             {% endif %}
 
+          cena_g12_tansza_kwh: "{{ states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) }}"
+
           cena_g11_kwh: "{{ states('var.g11_cena_kwh') | float(0.96) }}"
 
           # Kwoty dla tego slotu
@@ -341,6 +527,45 @@ automation:
             {% else %}
               0
             {% endif %}
+
+          # Cykl 6-6: eksport za tanio (06-22, RCE < G12_tańsza)
+          slot_cykl_eksport_tanio_kwh: >
+            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% if h >= 6 and h < 22
+                and delta_sold | float(0) > 0
+                and cena_sprzedazy_kwh | float(0) > 0
+                and cena_sprzedazy_kwh | float(0) < cena_g12_tansza_kwh | float(0.65) %}
+              {{ delta_sold | float(0) }}
+            {% else %}
+              0
+            {% endif %}
+          slot_cykl_eksport_tanio_strata_pln: >
+            {{ [slot_cykl_eksport_tanio_kwh | float(0) * (cena_g12_tansza_kwh | float(0.65) - cena_sprzedazy_kwh | float(0)), 0] | max | round(4) }}
+
+          # Cykl 6-6: import nocny (22-06)
+          slot_cykl_import_noc_kwh: >
+            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% if h >= 22 or h < 6 %}
+              {{ delta_bought | float(0) }}
+            {% else %}
+              0
+            {% endif %}
+          slot_cykl_import_noc_pln: >
+            {{ (slot_cykl_import_noc_kwh | float(0) * cena_g12_tansza_kwh | float(0.65)) | round(4) }}
+
+          # Cykl 6-6: dobry eksport (06-22, RCE >= G12_tańsza + marża)
+          slot_cykl_eksport_dobry_kwh: >
+            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% set marza = states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0.38) %}
+            {% if h >= 6 and h < 22
+                and delta_sold | float(0) > 0
+                and cena_sprzedazy_kwh | float(0) >= cena_g12_tansza_kwh | float(0.65) + marza %}
+              {{ delta_sold | float(0) }}
+            {% else %}
+              0
+            {% endif %}
+          slot_cykl_eksport_dobry_pln: >
+            {{ (slot_cykl_eksport_dobry_kwh | float(0) * cena_sprzedazy_kwh | float(0)) | round(4) }}
 
       # Akumuluj do dziennych varów
       - service: var.set
@@ -372,6 +597,38 @@ automation:
           entity_id: var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln
           value: >
             {{ (states('var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln') | float(0) + slot_koszt_ladowania_pod_sprzedaz) | round(4) }}
+
+      # Akumuluj straty cyklu 6-6
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_tanio_kwh
+          value: >
+            {{ (states('var.finanse_cykl_eksport_tanio_kwh') | float(0) + slot_cykl_eksport_tanio_kwh | float(0)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_tanio_strata_pln
+          value: >
+            {{ (states('var.finanse_cykl_eksport_tanio_strata_pln') | float(0) + slot_cykl_eksport_tanio_strata_pln | float(0)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_noc_kwh
+          value: >
+            {{ (states('var.finanse_cykl_import_noc_kwh') | float(0) + slot_cykl_import_noc_kwh | float(0)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_noc_pln
+          value: >
+            {{ (states('var.finanse_cykl_import_noc_pln') | float(0) + slot_cykl_import_noc_pln | float(0)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_dobry_kwh
+          value: >
+            {{ (states('var.finanse_cykl_eksport_dobry_kwh') | float(0) + slot_cykl_eksport_dobry_kwh | float(0)) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_dobry_pln
+          value: >
+            {{ (states('var.finanse_cykl_eksport_dobry_pln') | float(0) + slot_cykl_eksport_dobry_pln | float(0)) | round(4) }}
 
       # Zapisz poprzednie wartości liczników i czas triggera
       - service: var.set
@@ -484,4 +741,126 @@ automation:
       - service: var.set
         data:
           entity_id: var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln
+          value: 0
+
+  # Reset cyklu 6-6: zapisz poprzedni, akumuluj skum, zeruj, powiadom
+  - id: finanse_pv_reset_cykl_0600
+    alias: "Finanse PV: reset cyklu 6-6 o 06:00"
+    trigger:
+      - platform: time
+        at: "06:00:00"
+    action:
+      - variables:
+          eksport_tanio_kwh: "{{ states('var.finanse_cykl_eksport_tanio_kwh') | float(0) }}"
+          eksport_tanio_strata: "{{ states('var.finanse_cykl_eksport_tanio_strata_pln') | float(0) }}"
+          import_noc_kwh: "{{ states('var.finanse_cykl_import_noc_kwh') | float(0) }}"
+          import_noc_pln: "{{ states('var.finanse_cykl_import_noc_pln') | float(0) }}"
+          eksport_dobry_kwh: "{{ states('var.finanse_cykl_eksport_dobry_kwh') | float(0) }}"
+          eksport_dobry_pln: "{{ states('var.finanse_cykl_eksport_dobry_pln') | float(0) }}"
+          strata_laczna: "{{ states('var.finanse_cykl_eksport_tanio_strata_pln') | float(0) + states('var.finanse_cykl_import_noc_pln') | float(0) }}"
+
+      # Zapisz poprzedni cykl
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_eksport_tanio_kwh
+          value: "{{ eksport_tanio_kwh | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_eksport_tanio_strata_pln
+          value: "{{ eksport_tanio_strata | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_import_noc_kwh
+          value: "{{ import_noc_kwh | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_import_noc_pln
+          value: "{{ import_noc_pln | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_eksport_dobry_kwh
+          value: "{{ eksport_dobry_kwh | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_eksport_dobry_pln
+          value: "{{ eksport_dobry_pln | round(4) }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_prev_strata_laczna_pln
+          value: "{{ strata_laczna | round(4) }}"
+
+      # Dodaj do skumulowanych
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_eksport_tanio_kwh
+          value: >
+            {{ (states('var.finanse_cykl_skum_eksport_tanio_kwh') | float(0) + eksport_tanio_kwh) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_eksport_tanio_strata_pln
+          value: >
+            {{ (states('var.finanse_cykl_skum_eksport_tanio_strata_pln') | float(0) + eksport_tanio_strata) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_import_noc_kwh
+          value: >
+            {{ (states('var.finanse_cykl_skum_import_noc_kwh') | float(0) + import_noc_kwh) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_import_noc_pln
+          value: >
+            {{ (states('var.finanse_cykl_skum_import_noc_pln') | float(0) + import_noc_pln) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_strata_laczna_pln
+          value: >
+            {{ (states('var.finanse_cykl_skum_strata_laczna_pln') | float(0) + strata_laczna) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_eksport_dobry_kwh
+          value: >
+            {{ (states('var.finanse_cykl_skum_eksport_dobry_kwh') | float(0) + eksport_dobry_kwh) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_skum_eksport_dobry_pln
+          value: >
+            {{ (states('var.finanse_cykl_skum_eksport_dobry_pln') | float(0) + eksport_dobry_pln) | round(4) }}
+
+      # Powiadomienie
+      - service: script.ems_notify
+        data:
+          title: "🔋 Straty magazynu – cykl {{ (now() - timedelta(days=1)).strftime('%d.%m') }} 06:00 → {{ now().strftime('%d.%m') }} 06:00"
+          message: >
+            ❌ Eksport za tanio:  {{ eksport_tanio_kwh | round(2) }} kWh → strata {{ eksport_tanio_strata | round(2) }} PLN
+            🌙 Import nocny:      {{ import_noc_kwh | round(2) }} kWh → koszt  {{ import_noc_pln | round(2) }} PLN
+            ──────────────────────────────
+            💸 Łączna strata cyklu: {{ strata_laczna | round(2) }} PLN
+            ✅ Dobry eksport:     {{ eksport_dobry_kwh | round(2) }} kWh → przychód {{ eksport_dobry_pln | round(2) }} PLN
+
+            📊 Skumulowana strata (dożywotnia): {{ (states('var.finanse_cykl_skum_strata_laczna_pln') | float(0)) | round(2) }} PLN
+
+      # Zeruj bieżący cykl
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_tanio_kwh
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_tanio_strata_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_noc_kwh
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_import_noc_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_dobry_kwh
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_cykl_eksport_dobry_pln
           value: 0
