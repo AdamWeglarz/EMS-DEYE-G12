@@ -2431,3 +2431,395 @@ automation:
             35
           {% endif %}
 
+# ============================================================
+# AGD: OPTYMALNY START PRALKI I SUSZARKI (EMS-aware)
+# ============================================================
+
+- id: agd_suszarka_scheduler
+  alias: "AGD Suszarka: Scheduler — oblicz optymalny start"
+  mode: restart
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_remotecontrolstartallowed
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_operationstate
+      state: "BSH.Common.EnumType.OperationState.Ready"
+    - condition: state
+      entity_id: binary_sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_doorstate
+      state: "off"
+  variables:
+    rce_spill_target: >-
+      {% set rce_list = state_attr('sensor.rce_prices_today_scaled', 'value') | default([]) %}
+      {% set thr = states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0.22) * 1000 %}
+      {% set ns = namespace(t=None) %}
+      {% for s in rce_list %}
+        {% if s.rce_pln | float < thr and s.dtime > now().strftime('%Y-%m-%d %H:%M:%S') and ns.t is none %}
+          {% set slot_start = (as_datetime(s.dtime) - timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S') %}
+          {% if slot_start > now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {% set ns.t = slot_start %}
+          {% else %}
+            {% set ns.t = (now() + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S') %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.t | default(now().replace(hour=13, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')) }}
+  action:
+    - choose:
+        - conditions:
+            - condition: time
+              after: "06:00:00"
+              before: "13:00:00"
+            - condition: template
+              value_template: "{{ states('var.spill_poranny') | float(0) > 1.0 }}"
+          sequence:
+            - service: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.suszarka_planned_start
+              data:
+                datetime: "{{ rce_spill_target }}"
+            - service: light.turn_on
+              target:
+                entity_id: light.pralnia
+            - delay: "00:00:02"
+            - service: light.turn_off
+              target:
+                entity_id: light.pralnia
+        - conditions:
+            - condition: time
+              after: "06:00:00"
+              before: "13:00:00"
+            - condition: template
+              value_template: >-
+                {{ states('sensor.solcast_pv_forecast_prognoza_na_dzisiaj') | float(99) <
+                   states('var.magazyn_lowpv_threshold_rano_kwh') | float(8) and
+                   states('sensor.solarman_battery_safe') | float(0) <
+                   states('var.cel_naladowania_o_13') | float(50) - 10 }}
+          sequence:
+            - service: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.suszarka_planned_start
+              data:
+                datetime: "{{ now().replace(hour=13, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S') }}"
+            - service: light.turn_on
+              target:
+                entity_id: light.pralnia
+            - delay: "00:00:02"
+            - service: light.turn_off
+              target:
+                entity_id: light.pralnia
+        - conditions:
+            - condition: time
+              after: "06:00:00"
+              before: "13:00:00"
+          sequence:
+            - service: button.press
+              target:
+                entity_id: button.siemens_wt7hy780pl_68a40e14bb26_start_pause
+        - conditions:
+            - condition: time
+              after: "13:00:00"
+              before: "15:00:00"
+          sequence:
+            - service: button.press
+              target:
+                entity_id: button.siemens_wt7hy780pl_68a40e14bb26_start_pause
+        - conditions:
+            - condition: time
+              after: "15:00:00"
+            - condition: template
+              value_template: "{{ states('var.spill_poranny') | float(0) > 0.3 }}"
+          sequence:
+            - service: button.press
+              target:
+                entity_id: button.siemens_wt7hy780pl_68a40e14bb26_start_pause
+      default:
+        - service: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.suszarka_planned_start
+          data:
+            datetime: >-
+              {% set t2330 = today_at('23:30') %}
+              {% if now() > t2330 %}
+                {{ (t2330 + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S') }}
+              {% else %}
+                {{ t2330.strftime('%Y-%m-%d %H:%M:%S') }}
+              {% endif %}
+        - service: light.turn_on
+          target:
+            entity_id: light.pralnia
+        - delay: "00:00:02"
+        - service: light.turn_off
+          target:
+            entity_id: light.pralnia
+
+- id: agd_suszarka_executor
+  alias: "AGD Suszarka: Executor — start o zaplanowanej godzinie"
+  mode: single
+  trigger:
+    - platform: time
+      at: input_datetime.suszarka_planned_start
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.suszarka_planned_start
+      data:
+        datetime: "1970-01-01 00:00:00"
+    - if:
+        - condition: state
+          entity_id: binary_sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_remotecontrolstartallowed
+          state: "on"
+        - condition: state
+          entity_id: sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_operationstate
+          state: "BSH.Common.EnumType.OperationState.Ready"
+        - condition: state
+          entity_id: binary_sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_doorstate
+          state: "off"
+      then:
+        - service: button.press
+          target:
+            entity_id: button.siemens_wt7hy780pl_68a40e14bb26_start_pause
+
+- id: agd_suszarka_soc_watcher
+  alias: "AGD Suszarka: SOC watcher — przyspiesz start gdy SOC wystarczy"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: sensor.solarman_battery_safe
+  condition:
+    - condition: time
+      after: "06:00:00"
+      before: "13:00:00"
+    - condition: template
+      value_template: >-
+        {{ states('sensor.solarman_battery_safe') | float(0) >=
+           states('var.cel_naladowania_o_13') | float(50) + 3 }}
+    - condition: state
+      entity_id: binary_sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_remotecontrolstartallowed
+      state: "on"
+    - condition: template
+      value_template: >-
+        {% set dt = states('input_datetime.suszarka_planned_start') %}
+        {{ dt not in ['unknown', 'unavailable', ''] and
+           as_datetime(dt) > now() }}
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.suszarka_planned_start
+      data:
+        datetime: "{{ (now() + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S') }}"
+
+- id: agd_pralka_scheduler
+  alias: "AGD Pralka: Scheduler — oblicz optymalny start"
+  mode: restart
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_remotecontrolstartallowed
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_operationstate
+      state: "BSH.Common.EnumType.OperationState.Ready"
+    - condition: state
+      entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_doorstate
+      state: "off"
+  variables:
+    rce_spill_target: >-
+      {% set rce_list = state_attr('sensor.rce_prices_today_scaled', 'value') | default([]) %}
+      {% set thr = states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0.22) * 1000 %}
+      {% set ns = namespace(t=None) %}
+      {% for s in rce_list %}
+        {% if s.rce_pln | float < thr and s.dtime > now().strftime('%Y-%m-%d %H:%M:%S') and ns.t is none %}
+          {% set slot_start = (as_datetime(s.dtime) - timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S') %}
+          {% if slot_start > now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {% set ns.t = slot_start %}
+          {% else %}
+            {% set ns.t = (now() + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S') %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.t | default(now().replace(hour=13, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')) }}
+  action:
+    - choose:
+        - conditions:
+            - condition: time
+              after: "06:00:00"
+              before: "13:00:00"
+            - condition: template
+              value_template: "{{ states('var.spill_poranny') | float(0) > 1.0 }}"
+          sequence:
+            - service: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.pralka_planned_start
+              data:
+                datetime: "{{ rce_spill_target }}"
+            - service: light.turn_on
+              target:
+                entity_id: light.pralnia
+            - delay: "00:00:02"
+            - service: light.turn_off
+              target:
+                entity_id: light.pralnia
+        - conditions:
+            - condition: time
+              after: "06:00:00"
+              before: "13:00:00"
+            - condition: template
+              value_template: >-
+                {{ states('sensor.solcast_pv_forecast_prognoza_na_dzisiaj') | float(99) <
+                   states('var.magazyn_lowpv_threshold_rano_kwh') | float(8) and
+                   states('sensor.solarman_battery_safe') | float(0) <
+                   states('var.cel_naladowania_o_13') | float(50) - 10 }}
+          sequence:
+            - service: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.pralka_planned_start
+              data:
+                datetime: "{{ now().replace(hour=13, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S') }}"
+            - service: light.turn_on
+              target:
+                entity_id: light.pralnia
+            - delay: "00:00:02"
+            - service: light.turn_off
+              target:
+                entity_id: light.pralnia
+        - conditions:
+            - condition: time
+              after: "06:00:00"
+              before: "13:00:00"
+          sequence:
+            - service: button.press
+              target:
+                entity_id: button.siemens_wm14lphzpl_68a40e5ba649_start_pause
+        - conditions:
+            - condition: time
+              after: "13:00:00"
+              before: "15:00:00"
+          sequence:
+            - service: button.press
+              target:
+                entity_id: button.siemens_wm14lphzpl_68a40e5ba649_start_pause
+        - conditions:
+            - condition: time
+              after: "15:00:00"
+            - condition: template
+              value_template: "{{ states('var.spill_poranny') | float(0) > 0.3 }}"
+          sequence:
+            - service: button.press
+              target:
+                entity_id: button.siemens_wm14lphzpl_68a40e5ba649_start_pause
+      default:
+        - service: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.pralka_planned_start
+          data:
+            datetime: >-
+              {% set t2330 = today_at('23:30') %}
+              {% if now() > t2330 %}
+                {{ (t2330 + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S') }}
+              {% else %}
+                {{ t2330.strftime('%Y-%m-%d %H:%M:%S') }}
+              {% endif %}
+        - service: light.turn_on
+          target:
+            entity_id: light.pralnia
+        - delay: "00:00:02"
+        - service: light.turn_off
+          target:
+            entity_id: light.pralnia
+
+- id: agd_pralka_executor
+  alias: "AGD Pralka: Executor — start o zaplanowanej godzinie"
+  mode: single
+  trigger:
+    - platform: time
+      at: input_datetime.pralka_planned_start
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.pralka_planned_start
+      data:
+        datetime: "1970-01-01 00:00:00"
+    - if:
+        - condition: state
+          entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_remotecontrolstartallowed
+          state: "on"
+        - condition: state
+          entity_id: sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_operationstate
+          state: "BSH.Common.EnumType.OperationState.Ready"
+        - condition: state
+          entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_doorstate
+          state: "off"
+      then:
+        - service: button.press
+          target:
+            entity_id: button.siemens_wm14lphzpl_68a40e5ba649_start_pause
+
+- id: agd_pralka_soc_watcher
+  alias: "AGD Pralka: SOC watcher — przyspiesz start gdy SOC wystarczy"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: sensor.solarman_battery_safe
+  condition:
+    - condition: time
+      after: "06:00:00"
+      before: "13:00:00"
+    - condition: template
+      value_template: >-
+        {{ states('sensor.solarman_battery_safe') | float(0) >=
+           states('var.cel_naladowania_o_13') | float(50) + 3 }}
+    - condition: state
+      entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_remotecontrolstartallowed
+      state: "on"
+    - condition: template
+      value_template: >-
+        {% set dt = states('input_datetime.pralka_planned_start') %}
+        {{ dt not in ['unknown', 'unavailable', ''] and
+           as_datetime(dt) > now() }}
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.pralka_planned_start
+      data:
+        datetime: "{{ (now() + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S') }}"
+
+- id: agd_suszarka_cancel
+  alias: "AGD Suszarka: Anuluj scheduler gdy remote start wyłączony"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.siemens_wt7hy780pl_68a40e14bb26_bsh_common_status_remotecontrolstartallowed
+      to: "off"
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.suszarka_planned_start
+      data:
+        datetime: "1970-01-01 00:00:00"
+
+- id: agd_pralka_cancel
+  alias: "AGD Pralka: Anuluj scheduler gdy remote start wyłączony"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_remotecontrolstartallowed
+      to: "off"
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.pralka_planned_start
+      data:
+        datetime: "1970-01-01 00:00:00"
+
+input_datetime:
+  suszarka_planned_start:
+    name: Suszarka — zaplanowany start
+    has_date: true
+    has_time: true
+  pralka_planned_start:
+    name: Pralka — zaplanowany start
+    has_date: true
+    has_time: true
+
