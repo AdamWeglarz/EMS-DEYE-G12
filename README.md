@@ -84,6 +84,7 @@ recorder:
 - **Raporty finansowe (Actual vs Counterfactual)** – śledzenie oszczędności i przychodów w czasie rzeczywistym
 - **Sensory stabilizujące odczyty falownika** – filtrowanie skoków i `unknown`/`unavailable`
 - **Pełna konfigurowalność** – wszystkie parametry jako `var.*` edytowalne z UI bez zmiany kodu
+- **Optymalny start AGD (pralka, suszarka)** – scheduler EMS-aware uruchamia urządzenia w najtańszym/najbardziej zielonym momencie dnia na podstawie spill PV i cen RCE
 
 ---
 
@@ -97,7 +98,8 @@ packages/
 ├── automations_magazyn.yaml      # Główne automatyzacje: RANO (03-06) i POŁUDNIE (13-15)
 ├── magazyn_nowyeksport.yaml      # Eksport: oddawanie poranne (06-13), wieczorne (15-22), blokada 22
 ├── magazynlimity.yaml            # Bilans eksportu, przeniesiona energia, sensory pomocnicze
-└── finanse_pv.yaml               # Śledzenie oszczędności i przychodów ze sprzedaży
+├── finanse_pv.yaml               # Śledzenie oszczędności i przychodów ze sprzedaży
+└── ems_agd.yaml                  # Scheduler AGD: optymalny start pralki i suszarki
 ```
 
 ---
@@ -337,6 +339,50 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 | `magazyn_freeze_time` | 22:00 | Godzina blokady rozładowania (nocna) |
 | `magazyn_koszt_calkowity_strefa_drozsza_pln_kwh` | 1,03 PLN/kWh | Pełny koszt energii – strefa droższa (G2) |
 | `magazyn_koszt_calkowity_strefa_tansza_pln_kwh` | 0,65 PLN/kWh | Pełny koszt energii – strefa tańsza (G1) |
+
+---
+
+## Scheduler AGD – optymalny start pralki i suszarki
+
+System automatycznie uruchamia pralkę i suszarkę Siemens (Home Connect) w momencie najbardziej korzystnym energetycznie, bez ingerencji użytkownika po załadowaniu programu.
+
+### Trigger
+
+Automatyzacja odpala się gdy urządzenie sygnalizuje gotowość do zdalnego startu:
+`binary_sensor.*_bsh_common_status_remotecontrolstartallowed` → `on`
+
+Warunki wstępne: `operationstate = Ready` i drzwi zamknięte (`doorstate = off`).
+
+### Logika wyboru czasu startu
+
+| Czas | Warunek | Akcja |
+|------|---------|-------|
+| 06:00–13:00 | `var.spill_poranny > 1 kWh` | Czekaj aż RCE bieżącego slotu (15-min) < `var.magazyn_min_zysk_sprzedaz_pln_kwh` (220 PLN/MWh) — eksport i tak nieopłacalny, lepiej zużyć lokalnie |
+| 06:00–13:00 | Prognoza PV < 8 kWh i SOC < cel_13 − 10% | Czekaj do 13:00 (lub wcześniej jeśli SOC ≥ cel_13 + 3%) |
+| 06:00–13:00 | Inne | Natychmiast |
+| 13:00–15:00 | Zawsze | Natychmiast (tania strefa G12) |
+| 15:00–24:00 | `var.spill_poranny > 0.3 kWh` | Natychmiast |
+| 15:00–24:00 | Brak spillu | O 23:30 |
+
+### Architektura (restart-safe)
+
+Zaplanowany czas startu zapisywany jest w `input_datetime` persystowanym przez restart HA:
+
+- **Scheduler** – oblicza optymalny czas, ustawia `input_datetime.*_planned_start`, miga światłem `light.pralnia` (2s, przywraca stan) jeśli start odroczony
+- **Executor** – trigger `time at: input_datetime.*_planned_start`, sprawdza warunki i wciska przycisk start; po wykonaniu resetuje timer do `1970-01-01`
+- **SOC watcher** – monitoruje SOC w oknie 6-13 i przyspiesza timer do `now+1min` gdy bateria wystarczająco naładowana
+- **Cancel** – gdy `remotecontrolstartallowed` → `off` (użytkownik anulował), timer jest kasowany
+
+### Encje urządzeń
+
+| | Pralka | Suszarka |
+|---|---|---|
+| Prefix | `siemens_wm14lphzpl_68a40e5ba649` | `siemens_wt7hy780pl_68a40e14bb26` |
+| Timer | `input_datetime.pralka_planned_start` | `input_datetime.suszarka_planned_start` |
+
+### Powiadomienia
+
+Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notify` (podlega filtrowi `input_boolean.ems_powiadomienia`).
 
 ---
 
