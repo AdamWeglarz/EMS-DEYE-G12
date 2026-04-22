@@ -397,6 +397,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 - **Jeden magazyn** – architektura zakłada pojedynczy magazyn energii. Wiele magazynów nie jest obsługiwanych.
 - **Brak obsługi feed-in tariff (FIT)** – system zakłada model prosumencki z bilansowaniem, nie stały odkup energii.
 - **Sterowanie manualne** – ręczna zmiana parametrów falownika z aplikacji Solarman może zostać nadpisana przez kolejną automatyzację EMS.
+- **Produkcja PV tylko z mikrofalownika** – aktualnie system odczytuje produkcję wyłącznie z `sensor.solarman_microinverter_energy_today`. Panele podłączone bezpośrednio do falownika głównego (stringi DC) nie są uwzględniane w bilansie i prognozowaniu.
 
 ---
 
