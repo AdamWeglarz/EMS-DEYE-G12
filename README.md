@@ -405,6 +405,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ### 2026-04-23
 - **Poprawka `script.pralnia_mignij`** (`packages/ems_agd.yaml`): przy włączonym świetle `turn_on` był no-op — brak widocznego mignięcia; teraz logika rozgałęziona: jeśli ON → wyłącz 2s → włącz; jeśli OFF → włącz 2s → wyłącz
+- **Powiadomienie po ustawieniu min SOC rano** (`packages/automations_magazyn.yaml`): automatyzacja `magazyn_soc_min_rano_pogoda` (5:29) wysyła `ems_notify` z wartością SOC i stanem pogody (`weather.pirateweather`)
 
 ### 2026-04-22
 - **Straty małego magazynu — cykl 6-6** (`packages/finanse_pv.yaml`): nowe akumulatory i sensory mierzące ile pieniędzy "ucieka" przez zbyt małą pojemność baterii w cyklu 6:00→6:00
