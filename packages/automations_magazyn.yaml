@@ -2430,3 +2430,10 @@ automation:
           {% else %}
             35
           {% endif %}
+    - service: script.ems_notify
+      data:
+        title: >-
+          ☀️ Min SOC rano: {{ states('var.magazyn_soc_min_rano_percent') | int }}% | {{ states('weather.pirateweather') }}
+        message: >-
+          Ustawiono min SOC rano = {{ states('var.magazyn_soc_min_rano_percent') | int }}%
+          na podstawie pogody: {{ states('weather.pirateweather') }}
