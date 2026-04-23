@@ -363,14 +363,22 @@ script:
     sequence:
       - variables:
           bylo_wlaczone: "{{ is_state('light.pralnia', 'on') }}"
-      - service: light.turn_on
-        target:
-          entity_id: light.pralnia
-      - delay: "00:00:02"
       - if:
           - condition: template
-            value_template: "{{ not bylo_wlaczone }}"
+            value_template: "{{ bylo_wlaczone }}"
         then:
+          - service: light.turn_off
+            target:
+              entity_id: light.pralnia
+          - delay: "00:00:02"
+          - service: light.turn_on
+            target:
+              entity_id: light.pralnia
+        else:
+          - service: light.turn_on
+            target:
+              entity_id: light.pralnia
+          - delay: "00:00:02"
           - service: light.turn_off
             target:
               entity_id: light.pralnia
