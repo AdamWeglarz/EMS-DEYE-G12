@@ -403,10 +403,14 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-04-23
+- **Poprawka `script.pralnia_mignij`** (`packages/ems_agd.yaml`): przy włączonym świetle `turn_on` był no-op — brak widocznego mignięcia; teraz logika rozgałęziona: jeśli ON → wyłącz 2s → włącz; jeśli OFF → włącz 2s → wyłącz
+
 ### 2026-04-22
 - **Straty małego magazynu — cykl 6-6** (`packages/finanse_pv.yaml`): nowe akumulatory i sensory mierzące ile pieniędzy "ucieka" przez zbyt małą pojemność baterii w cyklu 6:00→6:00
   - `eksport_tanio`: kWh oddane przy RCE < G12_tańsza + strata PLN
   - `import_noc`: kWh kupione 22-06 bo magazyn pusty + koszt PLN
+  - `import_dzien_drogi`: kWh kupione z sieci w godzinach 06-13 i 15-22 (strefa droga G12) przy niskiej produkcji PV — nowy trzeci składnik straty łącznej (dodano 2026-04-22)
   - `eksport_dobry`: kWh sprzedane powyżej progu G12_tańsza + marża (informacyjnie)
   - Warianty: bieżący cykl, poprzedni cykl (zapis 06:00), skumulowany dożywotni; reset + powiadomienie codziennie o 06:00
 - **Nowy pakiet `packages/ems_agd.yaml`** — optymalny start pralki i suszarki (Siemens BSH / Home Connect)
