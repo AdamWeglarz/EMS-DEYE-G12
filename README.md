@@ -403,6 +403,12 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-04-24 (2)
+- **PV export niezależny od BAT floor** (`packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
+  - Nowa zmienna `magazyn_soc_pv_floor_percent` (default 15%) — minimalny SOC do eksportu PV; poniżej tego PV też się zatrzymuje
+  - Warunek `soc < soc_comfort_pct` w eksporcie porannym przestał blokować PV: teraz zatrzymuje tylko BAT, PV kontynuuje jeśli jest nadwyżka i SOC ≥ nowy floor (strażnik PV obsługuje dynamiczne stop/start przy zmianach produkcji)
+  - Strażnik SOC: nowy warunek dla trybu `bat_spill/pv_bat_spill` — przy `soc ≤ spill_bat_floor − 1%` (histereza 1%) natychmiastowy przełącznik BAT→PV bez czekania 15 minut na kolejny trigger
+
 ### 2026-04-24
 - **Poprawka liczenia "eksport za tanio"** (`packages/finanse_pv.yaml`): usunięto warunek `cena_sprzedazy_kwh > 0` — eksporty przy cenie RCE ≤ 0 (ujemna lub zerowa, spill PV) były pomijane w statystyce strat; teraz każdy eksport dzienny poniżej G12_tańsza jest liczony
 
