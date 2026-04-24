@@ -2700,16 +2700,16 @@ automation:
           entity_id: var.magazyn_domykacz_exp_target
           value: "0"
 
-  - id: magazyn_domykacz_godziny_hh45_v1_0
-    alias: "Magazyn: Domykacz godziny (HH:45) v1.0"
+  - id: magazyn_domykacz_godziny_hh45_v2_0
+    alias: "Magazyn: Domykacz godziny (HH:45) v2.0"
     mode: single
     description: >
       Zadanie 2/2: o HH:45:30 sprawdza realne salda importu/eksportu w biezacej
-      godzinie i jesli import > eksport - wlacza rozladowanie baterii do sieci,
-      aby zbilansowac godzine przed HH+1:00. Nie narusza budzetu SOC potrzebnego
-      do dociagniecia do 13:00 (rano) ani do 22:00 (wieczorem). Jeden strzal na
-      godzine, niezalezny od planera - planer uruchomi sie normalnie o HH+1:00
-      i podejmie decyzje od nowa.
+      godzinie i jesli import > eksport - zamyka bilans przez ostatnie 15 min.
+      Jesli PV ma nadwyzke pokrywajaca deficyt → wlacza pv_discharge_to_grid (bez BAT).
+      Jesli brak nadwyzki PV → wlacza battery_discharge_to_grid jak dotychczas.
+      Nie narusza budzetu SOC potrzebnego do dociagniecia do 13:00 (rano) ani
+      do 22:00 (wieczorem). Jeden strzal na godzine, niezalezny od planera.
     trigger:
       - platform: time_pattern
         minutes: "45"
@@ -2738,6 +2738,8 @@ automation:
             {% else %}
               {{ states('var.magazyn_soc_floor_percent') | float(20) }}
             {% endif %}
+          pv_power_5m_w: "{{ states('sensor.srednia_moc_z_pv_5_minut') | float(0) }}"
+          house_power_5m_w: "{{ [states('sensor.srednia_moc_pobierana_przez_dom_2_5_minut') | float(0), 0] | max }}"
 
       - variables:
           imp_h: "{{ [imp_now - imp_snap, 0] | max }}"
@@ -2747,15 +2749,19 @@ automation:
           e_available_kwh: >
             {{ [((soc_now - (soc_floor_pct_eff | float(25))) / 100.0)
                 * (pojemnosc_kwh | float(15)), 0] | max }}
+          pv_surplus_w: "{{ [pv_power_5m_w - house_power_5m_w, 0] | max }}"
 
       - variables:
           deficit_allowed: "{{ [deficit_raw, slot_cap_kwh, e_available_kwh] | min }}"
+          pv_can_close_kwh: "{{ pv_surplus_w * 0.25 / 1000 }}"
+          pv_can_close: "{{ pv_can_close_kwh >= deficit_raw and deficit_raw > 0.05 }}"
           skip_reason: >-
             {% if not snap_is_fresh %}snapshot_stale
             {%- elif deficit_raw <= 0.05 %}no_deficit
-            {%- elif e_available_kwh <= 0.05 %}soc_floor
+            {%- elif e_available_kwh <= 0.05 and not pv_can_close %}soc_floor
             {%- else %}OK{%- endif %}
           was_discharging: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
+          was_pv_discharging: "{{ is_state('input_boolean.pv_discharge_to_grid', 'on') }}"
 
       - service: script.ems_notify
         data:
@@ -2768,30 +2774,46 @@ automation:
             | e_avail={{ e_available_kwh | round(3) }} kWh
             | deficit_allowed={{ deficit_allowed | round(3) }} kWh
             | SOC={{ soc_now }}% (floor {{ soc_floor_pct_eff }}%)
+            | pv_surplus={{ pv_surplus_w | round(0) }} W ({{ pv_can_close_kwh | round(3) }} kWh/15min)
+            | pv_can_close={{ pv_can_close }}
             | snap_fresh={{ snap_is_fresh }}
             | imp_snap={{ imp_snap | round(3) }} kWh
             | exp_snap={{ exp_snap | round(3) }} kWh
             | was_discharging={{ was_discharging }}
+            | was_pv_discharging={{ was_pv_discharging }}
 
       - condition: template
-        value_template: "{{ snap_is_fresh and deficit_allowed > 0.05 }}"
+        value_template: "{{ snap_is_fresh and (deficit_allowed > 0.05 or pv_can_close) }}"
 
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.battery_discharge_to_grid
-
-      # Twardy stop: zapisz bezwzględny cel eksportu do var.
-      # STOPPER_DOMYKACZ monitoruje sensor.solarman_total_energy_sold_safe
-      # i wyłącza discharge gdy target zostanie osiągnięty.
-      # Jeśli planer już wcześniej włączył discharge (was_discharging=true),
-      # nie ustawiamy targetu — planer sam zarządza dalej.
-      - condition: template
-        value_template: "{{ not was_discharging }}"
-
-      - service: var.set
-        data:
-          entity_id: var.magazyn_domykacz_exp_target
-          value: "{{ (exp_snap + deficit_allowed) | round(3) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ pv_can_close }}"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.pv_discharge_to_grid
+              # Nie ustawiamy targetu jesli planer juz wlaczyl PV — planer sam zarzadza.
+              - condition: template
+                value_template: "{{ not was_pv_discharging }}"
+              - service: var.set
+                data:
+                  entity_id: var.magazyn_domykacz_exp_target
+                  value: "{{ (exp_snap + deficit_raw) | round(3) }}"
+          - conditions:
+              - condition: template
+                value_template: "{{ deficit_allowed > 0.05 }}"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.battery_discharge_to_grid
+              # Nie ustawiamy targetu jesli planer juz wlaczyl discharge — planer sam zarzadza.
+              - condition: template
+                value_template: "{{ not was_discharging }}"
+              - service: var.set
+                data:
+                  entity_id: var.magazyn_domykacz_exp_target
+                  value: "{{ (exp_snap + deficit_allowed) | round(3) }}"
 
   ###############################################################################
   # STOPPER DOMYKACZA: wyłącz discharge gdy total_energy_sold_safe >= target
@@ -2806,12 +2828,17 @@ automation:
       - variables:
           exp_now: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
           target: "{{ states('var.magazyn_domykacz_exp_target') | float(0) }}"
-          discharging: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
+          discharging: >
+            {{ is_state('input_boolean.battery_discharge_to_grid', 'on')
+               or is_state('input_boolean.pv_discharge_to_grid', 'on') }}
       - condition: template
         value_template: "{{ target > 0 and discharging and exp_now >= target }}"
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.battery_discharge_to_grid
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.pv_discharge_to_grid
       - service: var.set
         data:
           entity_id: var.magazyn_domykacz_exp_target
@@ -2821,4 +2848,4 @@ automation:
           title: "Domykacz STOP: cel osiągnięty"
           message: >-
             exp_now={{ exp_now | round(3) }} kWh >= target={{ target | round(3) }} kWh
-            → battery_discharge_to_grid OFF
+            → battery_discharge_to_grid + pv_discharge_to_grid OFF
