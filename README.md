@@ -403,6 +403,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-04-24
+- **Poprawka liczenia "eksport za tanio"** (`packages/finanse_pv.yaml`): usunięto warunek `cena_sprzedazy_kwh > 0` — eksporty przy cenie RCE ≤ 0 (ujemna lub zerowa, spill PV) były pomijane w statystyce strat; teraz każdy eksport dzienny poniżej G12_tańsza jest liczony
+
 ### 2026-04-23
 - **Poprawka `script.pralnia_mignij`** (`packages/ems_agd.yaml`): przy włączonym świetle `turn_on` był no-op — brak widocznego mignięcia; teraz logika rozgałęziona: jeśli ON → wyłącz 2s → włącz; jeśli OFF → włącz 2s → wyłącz
 - **Powiadomienie po ustawieniu min SOC rano** (`packages/automations_magazyn.yaml`): automatyzacja `magazyn_soc_min_rano_pogoda` (5:29) wysyła `ems_notify` z wartością SOC i stanem pogody (`weather.pirateweather`)
