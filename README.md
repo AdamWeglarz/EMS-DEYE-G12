@@ -403,6 +403,11 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-04-24 (4)
+- **Domykacz HH:45 — action_mode w notyfikacji** (`packages/magazyn_nowyeksport.yaml`):
+  - Tytuł notyfikacji: `Domykacz HH:45 | <skip_reason> | <action_mode>` gdzie action_mode = `PV` / `BAT` / `SKIP`
+  - Body: dodano `| action=<action_mode>` — od razu widać czy i w jakim trybie domykacz zaczął oddawać energię
+
 ### 2026-04-24 (3)
 - **Domykacz HH:45 — PV-first** (`packages/magazyn_nowyeksport.yaml`, v2.0):
   - Jeśli nadwyżka PV (5-min avg) × 15 min ≥ deficyt godzinowy → domykacz włącza `pv_discharge_to_grid` zamiast BAT
