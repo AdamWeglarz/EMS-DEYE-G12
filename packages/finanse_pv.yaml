@@ -582,7 +582,6 @@ automation:
             {% set h = as_local(as_datetime(prev_time_str)).hour %}
             {% if h >= 6 and h < 22
                 and delta_sold | float(0) > 0
-                and cena_sprzedazy_kwh | float(0) > 0
                 and cena_sprzedazy_kwh | float(0) < cena_g12_tansza_kwh | float(0.65) %}
               {{ delta_sold | float(0) }}
             {% else %}
