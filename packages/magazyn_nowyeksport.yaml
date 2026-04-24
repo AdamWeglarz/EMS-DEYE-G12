@@ -2762,10 +2762,14 @@ automation:
             {%- else %}OK{%- endif %}
           was_discharging: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
           was_pv_discharging: "{{ is_state('input_boolean.pv_discharge_to_grid', 'on') }}"
+          action_mode: >-
+            {%- if skip_reason != 'OK' %}SKIP
+            {%- elif pv_can_close %}PV
+            {%- else %}BAT{%- endif %}
 
       - service: script.ems_notify
         data:
-          title: "Domykacz {{ h_now }}:45 | {{ skip_reason }}"
+          title: "Domykacz {{ h_now }}:45 | {{ skip_reason }} | {{ action_mode }}"
           message: >-
             imp_h={{ imp_h | round(3) }} kWh
             | exp_h={{ exp_h | round(3) }} kWh
@@ -2776,6 +2780,7 @@ automation:
             | SOC={{ soc_now }}% (floor {{ soc_floor_pct_eff }}%)
             | pv_surplus={{ pv_surplus_w | round(0) }} W ({{ pv_can_close_kwh | round(3) }} kWh/15min)
             | pv_can_close={{ pv_can_close }}
+            | action={{ action_mode }}
             | snap_fresh={{ snap_is_fresh }}
             | imp_snap={{ imp_snap | round(3) }} kWh
             | exp_snap={{ exp_snap | round(3) }} kWh
