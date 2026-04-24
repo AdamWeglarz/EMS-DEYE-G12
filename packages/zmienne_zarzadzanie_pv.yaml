@@ -364,6 +364,13 @@ var:
     initial_value: 30
     restore: true
 
+  magazyn_soc_pv_floor_percent:
+    unique_id: "magazyn_soc_pv_floor_percent"
+    friendly_name: "Magazyn: SOC floor dla eksportu PV (min SOC przy oddawaniu z PV)"
+    icon: "mdi:solar-power"
+    initial_value: 15
+    restore: true
+
   magazyn_soc_buffer_mid_percent:
     unique_id: "magazyn_soc_buffer_mid_percent"
     friendly_name: "Magazyn: bufor SOC mid-day (dodawany do min_dynamic_13 przy planowaniu nocnym)"
