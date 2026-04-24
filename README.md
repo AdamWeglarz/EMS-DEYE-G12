@@ -403,6 +403,14 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-04-24 (3)
+- **Domykacz HH:45 — PV-first** (`packages/magazyn_nowyeksport.yaml`, v2.0):
+  - Jeśli nadwyżka PV (5-min avg) × 15 min ≥ deficyt godzinowy → domykacz włącza `pv_discharge_to_grid` zamiast BAT
+  - Jeśli PV nie pokrywa deficytu → stare zachowanie: `battery_discharge_to_grid`
+  - Stopper wyłącza oba booleany (`pv_discharge_to_grid` + `battery_discharge_to_grid`) gdy eksport osiągnie cel
+  - Nowe zmienne diagnostyczne w notyfikacji: `pv_surplus`, `pv_can_close`, `was_pv_discharging`
+  - SOC przy floorze nie blokuje domykacza gdy PV może samodzielnie zamknąć bilans
+
 ### 2026-04-24 (2)
 - **PV export niezależny od BAT floor** (`packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
   - Nowa zmienna `magazyn_soc_pv_floor_percent` (default 15%) — minimalny SOC do eksportu PV; poniżej tego PV też się zatrzymuje
