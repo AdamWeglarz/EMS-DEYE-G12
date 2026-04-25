@@ -408,6 +408,13 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
   - Tytuł notyfikacji: `Domykacz HH:45 | <skip_reason> | <action_mode>` gdzie action_mode = `PV` / `BAT` / `SKIP`
   - Body: dodano `| action=<action_mode>` — od razu widać czy i w jakim trybie domykacz zaczął oddawać energię
 
+### 2026-04-25 (2)
+- **Fix: AGD Pralka/Suszarka — operationstate blokował remote start** (`packages/ems_agd.yaml`):
+  - Scheduler i executor wymagały `operationstate = Ready`, ale maszyna po zakończeniu cyklu jest w stanie `Finished`
+  - Przy ładowaniu nowego prania: drzwi otwarte→zamknięte, wybór programu, remote ON — BSH ustawia `remotecontrolstartallowed = "on"` ale `operationstate` nadal `Finished` z poprzedniego cyklu
+  - Automation condition failowała → pralka nie startowała zdalnie
+  - Fix: warunek `condition: state` na operationstate zamieniony na `condition: template` akceptujący `Ready` **i** `Finished`
+
 ### 2026-04-25
 - **Fix: `sensor.aktualny_limit_magazyn` — wykluczenie PV spill** (`packages/magazynlimity.yaml`):
   - Poprzednio `limit_mag` po zaniku PV = `pojemnosc - export_po_13`, gdzie `export_po_13` zawierał także spill PV (nie tylko eksport z bat.) — zaniżało `przeniesionaenergia` na kolejny dzień
