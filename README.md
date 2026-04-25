@@ -408,6 +408,13 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
   - Tytuł notyfikacji: `Domykacz HH:45 | <skip_reason> | <action_mode>` gdzie action_mode = `PV` / `BAT` / `SKIP`
   - Body: dodano `| action=<action_mode>` — od razu widać czy i w jakim trybie domykacz zaczął oddawać energię
 
+### 2026-04-25
+- **Fix: `sensor.aktualny_limit_magazyn` — wykluczenie PV spill** (`packages/magazynlimity.yaml`):
+  - Poprzednio `limit_mag` po zaniku PV = `pojemnosc - export_po_13`, gdzie `export_po_13` zawierał także spill PV (nie tylko eksport z bat.) — zaniżało `przeniesionaenergia` na kolejny dzień
+  - Teraz: `battery_to_grid = min(daily_battery_discharge, export_po_13)` → bat. nie może "wyeksportować" więcej niż faktycznie rozładowała
+  - Dodane atrybuty diagnostyczne: `battery_discharge_today_kwh`, `battery_to_grid_kwh`
+  - Tryb `pv_zaniklo`: zmiana nazwy z `limit_brutto_minus_export_po_13` na `limit_brutto_minus_battery_to_grid`
+
 ### 2026-04-24 (3)
 - **Domykacz HH:45 — PV-first** (`packages/magazyn_nowyeksport.yaml`, v2.0):
   - Jeśli nadwyżka PV (5-min avg) × 15 min ≥ deficyt godzinowy → domykacz włącza `pv_discharge_to_grid` zamiast BAT
