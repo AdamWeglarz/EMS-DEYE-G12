@@ -189,9 +189,12 @@ automation:
       entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_remotecontrolstartallowed
       to: "on"
   condition:
-    - condition: state
-      entity_id: sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_operationstate
-      state: "BSH.Common.EnumType.OperationState.Ready"
+    - condition: template
+      value_template: >-
+        {{ states('sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_operationstate') in [
+           'BSH.Common.EnumType.OperationState.Ready',
+           'BSH.Common.EnumType.OperationState.Finished'
+        ] }}
     - condition: state
       entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_doorstate
       state: "off"
@@ -298,9 +301,12 @@ automation:
         - condition: state
           entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_remotecontrolstartallowed
           state: "on"
-        - condition: state
-          entity_id: sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_operationstate
-          state: "BSH.Common.EnumType.OperationState.Ready"
+        - condition: template
+          value_template: >-
+            {{ states('sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_operationstate') in [
+               'BSH.Common.EnumType.OperationState.Ready',
+               'BSH.Common.EnumType.OperationState.Finished'
+            ] }}
         - condition: state
           entity_id: binary_sensor.siemens_wm14lphzpl_68a40e5ba649_bsh_common_status_doorstate
           state: "off"
