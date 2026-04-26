@@ -494,6 +494,68 @@ template:
           {% set dzis = states('sensor.cykl_6_6_strata_malego_magazynu_dzis') | float(0) %}
           {{ (skum + dzis) | round(2) }}
 
+      - name: "RDN+Dystrybucja G12 Prices Today"
+        unique_id: "rdn_g12_dist_prices_today"
+        device_class: monetary
+        unit_of_measurement: "PLN/MWh"
+        state: >
+          {% set rdn = state_attr('sensor.rdn_prices_today_scaled', 'value') or [] %}
+          {% set d_dr = states('var.magazyn_koszt_dystrybucji_strefa_drozsza_pln_kwh') | float(0.37) * 1000 %}
+          {% set d_ta = states('var.magazyn_koszt_dystrybucji_strefa_tansza_pln_kwh') | float(0.12) * 1000 %}
+          {% set idx = now().hour * 4 + now().minute // 15 %}
+          {% if rdn | length > idx %}
+            {% set h = (idx * 15) // 60 %}
+            {% set dist = d_ta if (h < 6 or (13 <= h < 15) or h >= 22) else d_dr %}
+            {{ (rdn[idx].rdn_pln + dist) | round(2) }}
+          {% else %}
+            unavailable
+          {% endif %}
+        attributes:
+          value: >
+            {% set rdn = state_attr('sensor.rdn_prices_today_scaled', 'value') or [] %}
+            {% set d_dr = states('var.magazyn_koszt_dystrybucji_strefa_drozsza_pln_kwh') | float(0.37) * 1000 %}
+            {% set d_ta = states('var.magazyn_koszt_dystrybucji_strefa_tansza_pln_kwh') | float(0.12) * 1000 %}
+            {% set ns = namespace(result=[]) %}
+            {% for i in range(rdn | length) %}
+              {% set item = rdn[i] %}
+              {% set h = (i * 15) // 60 %}
+              {% set dist = d_ta if (h < 6 or (13 <= h < 15) or h >= 22) else d_dr %}
+              {% set combined = (item.rdn_pln + dist) | round(2) %}
+              {% set ns.result = ns.result + [{'dtime': item.dtime, 'period': item.period, 'rdn_pln': combined, 'dtime_utc': item.dtime_utc, 'period_utc': item.period_utc, 'business_date': item.business_date}] %}
+            {% endfor %}
+            {{ ns.result }}
+
+      - name: "RDN+Dystrybucja G12 Prices Tomorrow"
+        unique_id: "rdn_g12_dist_prices_tomorrow"
+        device_class: monetary
+        unit_of_measurement: "PLN/MWh"
+        state: >
+          {% set rdn = state_attr('sensor.rdn_prices_tomorrow_scaled', 'value') or [] %}
+          {% set d_dr = states('var.magazyn_koszt_dystrybucji_strefa_drozsza_pln_kwh') | float(0.37) * 1000 %}
+          {% set d_ta = states('var.magazyn_koszt_dystrybucji_strefa_tansza_pln_kwh') | float(0.12) * 1000 %}
+          {% set idx = now().hour * 4 + now().minute // 15 %}
+          {% if rdn | length > idx %}
+            {% set h = (idx * 15) // 60 %}
+            {% set dist = d_ta if (h < 6 or (13 <= h < 15) or h >= 22) else d_dr %}
+            {{ (rdn[idx].rdn_pln + dist) | round(2) }}
+          {% else %}
+            unavailable
+          {% endif %}
+        attributes:
+          value: >
+            {% set rdn = state_attr('sensor.rdn_prices_tomorrow_scaled', 'value') or [] %}
+            {% set d_dr = states('var.magazyn_koszt_dystrybucji_strefa_drozsza_pln_kwh') | float(0.37) * 1000 %}
+            {% set d_ta = states('var.magazyn_koszt_dystrybucji_strefa_tansza_pln_kwh') | float(0.12) * 1000 %}
+            {% set ns = namespace(result=[]) %}
+            {% for i in range(rdn | length) %}
+              {% set item = rdn[i] %}
+              {% set h = (i * 15) // 60 %}
+              {% set dist = d_ta if (h < 6 or (13 <= h < 15) or h >= 22) else d_dr %}
+              {% set combined = (item.rdn_pln + dist) | round(2) %}
+              {% set ns.result = ns.result + [{'dtime': item.dtime, 'period': item.period, 'rdn_pln': combined, 'dtime_utc': item.dtime_utc, 'period_utc': item.period_utc, 'business_date': item.business_date}] %}
+            {% endfor %}
+            {{ ns.result }}
+
 # ── Automatyzacje ──────────────────────────────────────────────────────────────
 
 automation:
