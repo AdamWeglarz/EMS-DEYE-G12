@@ -93,6 +93,22 @@ var:
     initial_value: 0
     restore: true
 
+  finanse_oszczednosc_vs_g12_dzis_pln:
+    unique_id: "finanse_oszczednosc_vs_g12_dzis_pln"
+    friendly_name: "Finanse: oszczędność vs G12 dziś"
+    icon: "mdi:piggy-bank-outline"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  finanse_oszczednosc_vs_g11_dzis_pln:
+    unique_id: "finanse_oszczednosc_vs_g11_dzis_pln"
+    friendly_name: "Finanse: oszczędność vs G11 dziś"
+    icon: "mdi:piggy-bank"
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
   # ── Poprzedni dzień (zapisywane przez reset) ───────────────────────────────
 
   finanse_import_koszt_wczoraj_pln:
@@ -412,20 +428,14 @@ template:
         unit_of_measurement: "PLN"
         icon: mdi:piggy-bank-outline
         state: >
-          {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
-          {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
-          {% set kontrafakt = states('var.finanse_kontrafakt_g12_dzis_pln') | float(0) %}
-          {{ (kontrafakt - (import_k - eksport_p)) | round(2) }}
+          {{ states('var.finanse_oszczednosc_vs_g12_dzis_pln') | float(0) | round(2) }}
 
       - name: "Finanse: oszczędność vs G11 dziś"
         unique_id: "finanse_oszczednosc_vs_g11_dzis"
         unit_of_measurement: "PLN"
         icon: mdi:piggy-bank
         state: >
-          {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
-          {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
-          {% set kontrafakt = states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) %}
-          {{ (kontrafakt - (import_k - eksport_p)) | round(2) }}
+          {{ states('var.finanse_oszczednosc_vs_g11_dzis_pln') | float(0) | round(2) }}
 
       - name: "Finanse: oszczędność całkowita vs G12"
         unique_id: "finanse_oszczednosc_calkowita_g12"
@@ -771,6 +781,31 @@ automation:
           value: >
             {{ (states('var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln') | float(0) + slot_koszt_ladowania_pod_sprzedaz) | round(4) }}
 
+      - variables:
+          oszczednosc_g12_raw: >
+            {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
+            {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
+            {% set kontrafakt = states('var.finanse_kontrafakt_g12_dzis_pln') | float(0) %}
+            {{ kontrafakt - (import_k - eksport_p) }}
+          oszczednosc_g11_raw: >
+            {% set import_k = states('var.finanse_import_koszt_dzis_pln') | float(0) %}
+            {% set eksport_p = states('var.finanse_eksport_przychod_dzis_pln') | float(0) %}
+            {% set kontrafakt = states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) %}
+            {{ kontrafakt - (import_k - eksport_p) }}
+
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_vs_g12_dzis_pln
+          value: >
+            {{ ([states('var.finanse_oszczednosc_vs_g12_dzis_pln') | float(0),
+                 oszczednosc_g12_raw | float(0), 0] | max) | round(4) }}
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_vs_g11_dzis_pln
+          value: >
+            {{ ([states('var.finanse_oszczednosc_vs_g11_dzis_pln') | float(0),
+                 oszczednosc_g11_raw | float(0), 0] | max) | round(4) }}
+
       # Akumuluj straty cyklu 6-6
       - service: var.set
         data:
@@ -843,6 +878,8 @@ automation:
           eksport_p: "{{ states('var.finanse_eksport_przychod_dzis_pln') | float(0) }}"
           kontrafakt_g12: "{{ states('var.finanse_kontrafakt_g12_dzis_pln') | float(0) }}"
           kontrafakt_g11: "{{ states('var.finanse_kontrafakt_g11_dzis_pln') | float(0) }}"
+          oszczednosc_g12: "{{ states('var.finanse_oszczednosc_vs_g12_dzis_pln') | float(0) }}"
+          oszczednosc_g11: "{{ states('var.finanse_oszczednosc_vs_g11_dzis_pln') | float(0) }}"
           koszt_netto: "{{ import_k - eksport_p }}"
           koszt_ladowania_pod_sprzedaz: "{{ states('var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln') | float(0) }}"
           zysk_sprzedazy: "{{ eksport_p - koszt_ladowania_pod_sprzedaz }}"
@@ -859,11 +896,11 @@ automation:
       - service: var.set
         data:
           entity_id: var.finanse_oszczednosc_vs_g12_wczoraj_pln
-          value: "{{ (kontrafakt_g12 - koszt_netto) | round(4) }}"
+          value: "{{ oszczednosc_g12 | round(4) }}"
       - service: var.set
         data:
           entity_id: var.finanse_oszczednosc_vs_g11_wczoraj_pln
-          value: "{{ (kontrafakt_g11 - koszt_netto) | round(4) }}"
+          value: "{{ oszczednosc_g11 | round(4) }}"
 
       # Dodaj do akumulatorów skumulowanych
       - service: var.set
@@ -871,13 +908,13 @@ automation:
           entity_id: var.finanse_oszczednosc_skumulowana_g12_pln
           value: >
             {{ (states('var.finanse_oszczednosc_skumulowana_g12_pln') | float(0)
-                + (kontrafakt_g12 - koszt_netto)) | round(4) }}
+                + oszczednosc_g12) | round(4) }}
       - service: var.set
         data:
           entity_id: var.finanse_oszczednosc_skumulowana_g11_pln
           value: >
             {{ (states('var.finanse_oszczednosc_skumulowana_g11_pln') | float(0)
-                + (kontrafakt_g11 - koszt_netto)) | round(4) }}
+                + oszczednosc_g11) | round(4) }}
       - service: var.set
         data:
           entity_id: var.finanse_zysk_sprzedazy_skumulowany_pln
@@ -897,8 +934,8 @@ automation:
             Kontrafakt G12: {{ kontrafakt_g12 | round(2) }} PLN
             Kontrafakt G11: {{ kontrafakt_g11 | round(2) }} PLN
 
-            💚 Oszczędność vs G12: {{ (kontrafakt_g12 - koszt_netto) | round(2) }} PLN
-            💚 Oszczędność vs G11: {{ (kontrafakt_g11 - koszt_netto) | round(2) }} PLN
+            💚 Oszczędność vs G12: {{ oszczednosc_g12 | round(2) }} PLN
+            💚 Oszczędność vs G11: {{ oszczednosc_g11 | round(2) }} PLN
 
             Przychód eksportu: {{ eksport_p | round(2) }} PLN
             Koszt ładowania pod sprzedaż: {{ koszt_ladowania_pod_sprzedaz | round(2) }} PLN
@@ -924,6 +961,14 @@ automation:
       - service: var.set
         data:
           entity_id: var.finanse_koszt_ladowania_pod_sprzedaz_dzis_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_vs_g12_dzis_pln
+          value: 0
+      - service: var.set
+        data:
+          entity_id: var.finanse_oszczednosc_vs_g11_dzis_pln
           value: 0
 
   # Reset cyklu 6-6: zapisz poprzedni, akumuluj skum, zeruj, powiadom
