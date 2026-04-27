@@ -1,6 +1,8 @@
 # EMS – Energy Management System for Home Assistant
 
-Zaawansowany system zarządzania energią zbudowany w Home Assistant, sterujący ładowaniem i rozładowaniem magazynu energii oraz sprzedażą energii do sieci. Decyzje podejmowane są w czasie rzeczywistym na podstawie prognozy PV (Solcast), historycznego zużycia (SQL), aktualnych cen RCE i warunków pogodowych. System jest zoptymalizowany pod taryfę G12 i model prosumencki z bilansowaniem godzinowym.
+Zaawansowany system zarządzania energią zbudowany w Home Assistant, sterujący ładowaniem i rozładowaniem magazynu energii oraz sprzedażą energii do sieci. Decyzje podejmowane są w czasie rzeczywistym na podstawie prognozy PV (Solcast), historycznego zużycia (SQL), aktualnych cen sprzedaży RCE i warunków pogodowych. System jest zoptymalizowany pod taryfę G12 i model prosumencki z bilansowaniem godzinowym.
+
+**Nomenklatura cen:** RCE oznacza cenę sprzedaży/eksportu energii do sieci i jest używane przez EMS do decyzji eksportowych. Import/zakup w EMS v1 jest liczony według statycznych stawek G12 (`var.magazyn_koszt_calkowity_strefa_*`). RDN to rynek/cena zakupu spot i w tym systemie występuje tylko poglądowo; dynamiczny import po RDN jest zakresem EMS2.
 
 ---
 
@@ -47,7 +49,7 @@ Zaawansowany system zarządzania energią zbudowany w Home Assistant, sterujący
 | [`solarman`](https://github.com/StephanJoubert/home_assistant_solarman) | Odczyty z falownika + sterowanie trybami (HACS) |
 | [`solcast-solar`](https://github.com/BJReplay/ha-solcast-solar) | Prognoza PV – atrybut `detailedForecast` (sloty 30-min); wymagany darmowy token API |
 | [`pirateweather`](https://github.com/alexander0042/pirate-weather-ha) | Prognoza pogody – korekta minimalnego SOC rano (HACS) |
-| [`rce_prices`](https://github.com/AdamWeglarz/rce_prices) | Sensor cen RCE z VAT: `sensor.rce_prices_today_scaled` / `tomorrow_scaled` |
+| [`rce_prices`](https://github.com/AdamWeglarz/rce_prices) | Sensor cen sprzedaży RCE z VAT: `sensor.rce_prices_today_scaled` / `tomorrow_scaled` |
 | [`snarky-snark/home-assistant-variables`](https://github.com/snarky-snark/home-assistant-variables) | Zmienne `var.*` – konfigurowalne parametry EMS (HACS) |
 
 ### Kalendarze (opcjonalne, modyfikują planowanie)
@@ -351,7 +353,7 @@ System automatycznie uruchamia pralkę i suszarkę Siemens (Home Connect) w mome
 Automatyzacja odpala się gdy urządzenie sygnalizuje gotowość do zdalnego startu:
 `binary_sensor.*_bsh_common_status_remotecontrolstartallowed` → `on`
 
-Warunki wstępne: `operationstate = Ready` i drzwi zamknięte (`doorstate = off`).
+Warunki wstępne: drzwi zamknięte (`doorstate = off`) oraz poprawny `operationstate`. Pralka akceptuje `Ready` i `Finished`; suszarka w aktualnej implementacji wymaga `Ready`.
 
 ### Logika wyboru czasu startu
 
@@ -388,7 +390,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Znane ograniczenia
 
-- **Tylko taryfa G12** – logika stref cenowych (droższa/tańsza) jest zakodowana pod G12. Taryfa G11 ani G12W nie są obsługiwane bez modyfikacji kodu. Ceny TGE RDN dostępne są w systemie wyłącznie poglądowo.
+- **Tylko taryfa G12** – logika kosztu importu/zakupu (droższa/tańsza) jest zakodowana pod G12. Taryfa G11 ani G12W nie są obsługiwane bez modyfikacji kodu. Ceny TGE/RDN, jeśli są dostępne w HA, są w EMS v1 wyłącznie poglądowe; decyzje eksportowe opierają się na RCE.
 - **Tylko falownik Deye/Solarman** – sterowanie przez encje `select.solarman_program_*`, `number.solarman_*`, `switch.solarman_battery_grid_charging`. Inne falowniki wymagają przeróbki całej warstwy sterującej.
 - **Wymaga MariaDB** – zapytania SQL po historii zużycia działają wyłącznie z MySQL/MariaDB. SQLite (domyślna baza HA) nie obsługuje wymaganych funkcji.
 - **Migracja do MariaDB usuwa historię** – przejście z SQLite wiąże się z utratą całej historii encji w HA.
@@ -409,7 +411,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
   - Body: dodano `| action=<action_mode>` — od razu widać czy i w jakim trybie domykacz zaczął oddawać energię
 
 ### 2026-04-25 (2)
-- **Fix: AGD Pralka/Suszarka — operationstate blokował remote start** (`packages/ems_agd.yaml`):
+- **Fix: AGD Pralka — operationstate blokował remote start** (`packages/ems_agd.yaml`):
   - Scheduler i executor wymagały `operationstate = Ready`, ale maszyna po zakończeniu cyklu jest w stanie `Finished`
   - Przy ładowaniu nowego prania: drzwi otwarte→zamknięte, wybór programu, remote ON — BSH ustawia `remotecontrolstartallowed = "on"` ale `operationstate` nadal `Finished` z poprzedniego cyklu
   - Automation condition failowała → pralka nie startowała zdalnie
