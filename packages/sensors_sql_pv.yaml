@@ -7,7 +7,7 @@ sql:
   - name: "Oddana energia biezacy slot 15min"
     unique_id: "sql_energy_sold_current_slot_15min"
     query: >
-      SELECT ROUND(MAX(st.sum) - MIN(st.sum), 4) AS value
+      SELECT COALESCE(ROUND(MAX(st.sum) - MIN(st.sum), 4), 0) AS value
       FROM statistics_short_term st
       JOIN statistics_meta sm ON st.metadata_id = sm.id
       WHERE sm.statistic_id = 'sensor.solarman_total_energy_sold_safe'
