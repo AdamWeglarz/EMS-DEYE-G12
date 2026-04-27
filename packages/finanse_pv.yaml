@@ -618,6 +618,58 @@ template:
             {% endfor %}
             {{ ns.result }}
 
+      - name: "G12 Prices Today"
+        unique_id: "g12_prices_today"
+        device_class: monetary
+        unit_of_measurement: "PLN/MWh"
+        state: >
+          {% set h = now().hour %}
+          {% set c_ta = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) * 1000 %}
+          {% set c_dr = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) * 1000 %}
+          {{ (c_ta if (h < 6 or (13 <= h < 15) or h >= 22) else c_dr) | round(2) }}
+        attributes:
+          value: >
+            {% set c_ta = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) * 1000 %}
+            {% set c_dr = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) * 1000 %}
+            {% set ns = namespace(result=[]) %}
+            {% for i in range(96) %}
+              {% set h = (i * 15) // 60 %}
+              {% set price = c_ta if (h < 6 or (13 <= h < 15) or h >= 22) else c_dr %}
+              {% set slot_dt = (today_at('00:00') + timedelta(minutes=(i + 1) * 15)).isoformat() %}
+              {% set ns.result = ns.result + [{'dtime': slot_dt, 'rdn_pln': price | round(2)}] %}
+            {% endfor %}
+            {{ ns.result }}
+
+      - name: "G12 Prices Tomorrow"
+        unique_id: "g12_prices_tomorrow"
+        device_class: monetary
+        unit_of_measurement: "PLN/MWh"
+        state: >
+          {% if now().hour < 14 or (now().hour == 14 and now().minute < 12) %}
+            unavailable
+          {% else %}
+            {% set h = now().hour %}
+            {% set c_ta = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) * 1000 %}
+            {% set c_dr = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) * 1000 %}
+            {{ (c_ta if (h < 6 or (13 <= h < 15) or h >= 22) else c_dr) | round(2) }}
+          {% endif %}
+        attributes:
+          value: >
+            {% if now().hour < 14 or (now().hour == 14 and now().minute < 12) %}
+              {{ [] }}
+            {% else %}
+              {% set c_ta = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) * 1000 %}
+              {% set c_dr = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) * 1000 %}
+              {% set ns = namespace(result=[]) %}
+              {% for i in range(96) %}
+                {% set h = (i * 15) // 60 %}
+                {% set price = c_ta if (h < 6 or (13 <= h < 15) or h >= 22) else c_dr %}
+                {% set slot_dt = (today_at('00:00') + timedelta(days=1, minutes=(i + 1) * 15)).isoformat() %}
+                {% set ns.result = ns.result + [{'dtime': slot_dt, 'rdn_pln': price | round(2)}] %}
+              {% endfor %}
+              {{ ns.result }}
+            {% endif %}
+
 # ── Automatyzacje ──────────────────────────────────────────────────────────────
 
 automation:
