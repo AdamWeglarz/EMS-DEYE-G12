@@ -1,0 +1,131 @@
+###############################################################################
+# EMS1 — dashboard diagnostics
+###############################################################################
+
+template:
+  - sensor:
+      - name: "EMS1: akcja"
+        unique_id: ems1_action
+        icon: mdi:home-lightning-bolt-outline
+        state: >
+          {% if is_state('input_boolean.battery_charge_from_grid', 'on') %}
+            charge
+          {% elif is_state('input_boolean.battery_discharge_to_grid', 'on') %}
+            discharge
+          {% elif is_state('input_boolean.pv_discharge_to_grid', 'on') %}
+            pv_export
+          {% else %}
+            idle
+          {% endif %}
+
+      - name: "EMS1: PV aktualne"
+        unique_id: ems1_pv_actual_kw
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        icon: mdi:solar-power
+        state: >
+          {{ (states('sensor.solarman_microinverter_power_safe') | float(0) / 1000) | round(3) }}
+
+      - name: "EMS1: PV prognoza teraz"
+        unique_id: ems1_pv_forecast_now_kw
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        icon: mdi:solar-power-variant-outline
+        state: >
+          {{ (states('sensor.solcast_pv_forecast_moc_w_30_minut') | float(0) / 1000) | round(3) }}
+
+      - name: "EMS1: blad prognozy PV"
+        unique_id: ems1_pv_forecast_error_kw
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        icon: mdi:delta
+        state: >
+          {{ (
+            states('sensor.ems1_pv_aktualne') | float(0)
+            - states('sensor.ems1_pv_prognoza_teraz') | float(0)
+          ) | round(3) }}
+
+      - name: "EMS1: blad prognozy PV procent"
+        unique_id: ems1_pv_forecast_error_pct
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:percent-outline
+        state: >
+          {% set forecast = states('sensor.ems1_pv_prognoza_teraz') | float(0) %}
+          {% if forecast <= 0 %}
+            0
+          {% else %}
+            {{ ((states('sensor.ems1_blad_prognozy_pv') | float(0)) / forecast * 100) | round(1) }}
+          {% endif %}
+
+      - name: "EMS1: dom aktualnie"
+        unique_id: ems1_home_actual_kw
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        icon: mdi:home-lightning-bolt
+        state: >
+          {{ (states('sensor.moc_pobierana_przez_dom_safe') | float(0) / 1000) | round(3) }}
+
+      - name: "EMS1: dom prognoza teraz"
+        unique_id: ems1_home_forecast_now_kw
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        icon: mdi:home-analytics
+        state: >
+          {{ (states('sensor.srednia_moc_pobierana_przez_dom_2_5_minut') | float(0) / 1000) | round(3) }}
+
+      - name: "EMS1: blad prognozy domu"
+        unique_id: ems1_home_forecast_error_kw
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        icon: mdi:delta
+        state: >
+          {{ (
+            states('sensor.ems1_dom_aktualnie') | float(0)
+            - states('sensor.ems1_dom_prognoza_teraz') | float(0)
+          ) | round(3) }}
+
+      - name: "EMS1: blad prognozy domu procent"
+        unique_id: ems1_home_forecast_error_pct
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:percent-outline
+        state: >
+          {% set forecast = states('sensor.ems1_dom_prognoza_teraz') | float(0) %}
+          {% if forecast <= 0 %}
+            0
+          {% else %}
+            {{ ((states('sensor.ems1_blad_prognozy_domu') | float(0)) / forecast * 100) | round(1) }}
+          {% endif %}
+
+      - name: "EMS1: PV prognoza dzis"
+        unique_id: ems1_pv_forecast_today_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:solar-power-variant
+        state: >
+          {{ states('sensor.solcast_pv_forecast_prognoza_na_dzisiaj') | float(0) | round(2) }}
+
+      - name: "EMS1: PV prognoza pozostala"
+        unique_id: ems1_pv_forecast_remaining_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:weather-sunset-down
+        state: >
+          {{ states('sensor.solcast_pv_forecast_pozostala_prognoza_na_dzis') | float(0) | round(2) }}
+
+      - name: "EMS1: podsumowanie"
+        unique_id: ems1_summary
+        icon: mdi:clipboard-text-outline
+        state: >
+          {{ states('sensor.ems1_akcja') }} |
+          PV err={{ states('sensor.ems1_blad_prognozy_pv') }} kW,
+          dom err={{ states('sensor.ems1_blad_prognozy_domu') }} kW

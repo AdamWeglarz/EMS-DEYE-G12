@@ -1,0 +1,48 @@
+title: EMS1 Shadow
+views:
+  - title: EMS1 Shadow
+    path: ems1-shadow
+    icon: mdi:home-lightning-bolt-outline
+    cards:
+      - type: entities
+        title: Decyzja EMS1
+        entities:
+          - sensor.ems1_akcja
+          - sensor.tryb_dzialania_solarman
+          - input_boolean.battery_charge_from_grid
+          - input_boolean.battery_discharge_to_grid
+          - input_boolean.pv_discharge_to_grid
+          - input_number.manual_battery_charge_limit
+          - sensor.solarman_battery_safe
+          - sensor.ems1_podsumowanie
+
+      - type: entities
+        title: Prognoza PV
+        entities:
+          - sensor.ems1_pv_aktualne
+          - sensor.ems1_pv_prognoza_teraz
+          - sensor.ems1_blad_prognozy_pv
+          - sensor.ems1_blad_prognozy_pv_procent
+          - sensor.ems1_pv_prognoza_dzis
+          - sensor.ems1_pv_prognoza_pozostala
+          - sensor.solcast_pv_forecast_moc_w_30_minut
+          - sensor.solcast_pv_forecast_pozostala_prognoza_na_dzis
+
+      - type: entities
+        title: Prognoza domu
+        entities:
+          - sensor.ems1_dom_aktualnie
+          - sensor.ems1_dom_prognoza_teraz
+          - sensor.ems1_blad_prognozy_domu
+          - sensor.ems1_blad_prognozy_domu_procent
+          - sensor.moc_pobierana_przez_dom_safe
+          - sensor.srednia_moc_pobierana_przez_dom_2_5_minut
+
+      - type: entities
+        title: Kontekst energii
+        entities:
+          - sensor.solarman_microinverter_power_safe
+          - sensor.moc_pobierana_przez_dom_safe
+          - sensor.solarman_battery_safe
+          - sensor.rce_prices_today_scaled
+          - sensor.g12_prices_today
