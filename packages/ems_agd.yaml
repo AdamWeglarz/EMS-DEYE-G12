@@ -51,6 +51,13 @@ automation:
               data:
                 datetime: "{{ rce_spill_target }}"
             - service: script.pralnia_mignij
+            - service: script.ems_notify
+              data:
+                title: "🌀 Suszarka zaplanowana"
+                message: >-
+                  Start o {{ as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M') }}.
+                  {% set p = as_datetime(states('input_datetime.pralka_planned_start')) %}
+                  {% if p is not none and p.year > 2000 %} Pralka: {{ p | as_local | strftime('%H:%M') }}.{% endif %}
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -68,6 +75,13 @@ automation:
               data:
                 datetime: "{{ now().replace(hour=13, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S') }}"
             - service: script.pralnia_mignij
+            - service: script.ems_notify
+              data:
+                title: "🌀 Suszarka zaplanowana"
+                message: >-
+                  Start o {{ as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M') }}.
+                  {% set p = as_datetime(states('input_datetime.pralka_planned_start')) %}
+                  {% if p is not none and p.year > 2000 %} Pralka: {{ p | as_local | strftime('%H:%M') }}.{% endif %}
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -106,6 +120,13 @@ automation:
                 {{ t2330.strftime('%Y-%m-%d %H:%M:%S') }}
               {% endif %}
         - service: script.pralnia_mignij
+        - service: script.ems_notify
+          data:
+            title: "🌀 Suszarka zaplanowana"
+            message: >-
+              Start o {{ as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M') }}.
+              {% set p = as_datetime(states('input_datetime.pralka_planned_start')) %}
+              {% if p is not none and p.year > 2000 %} Pralka: {{ p | as_local | strftime('%H:%M') }}.{% endif %}
 
 - id: agd_suszarka_executor
   alias: "AGD Suszarka: Executor — start o zaplanowanej godzinie"
@@ -229,6 +250,13 @@ automation:
               data:
                 datetime: "{{ rce_spill_target }}"
             - service: script.pralnia_mignij
+            - service: script.ems_notify
+              data:
+                title: "🫧 Pralka zaplanowana"
+                message: >-
+                  Start o {{ as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M') }}.
+                  {% set s = as_datetime(states('input_datetime.suszarka_planned_start')) %}
+                  {% if s is not none and s.year > 2000 %} Suszarka: {{ s | as_local | strftime('%H:%M') }}.{% endif %}
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -246,6 +274,13 @@ automation:
               data:
                 datetime: "{{ now().replace(hour=13, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S') }}"
             - service: script.pralnia_mignij
+            - service: script.ems_notify
+              data:
+                title: "🫧 Pralka zaplanowana"
+                message: >-
+                  Start o {{ as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M') }}.
+                  {% set s = as_datetime(states('input_datetime.suszarka_planned_start')) %}
+                  {% if s is not none and s.year > 2000 %} Suszarka: {{ s | as_local | strftime('%H:%M') }}.{% endif %}
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -284,6 +319,13 @@ automation:
                 {{ t2330.strftime('%Y-%m-%d %H:%M:%S') }}
               {% endif %}
         - service: script.pralnia_mignij
+        - service: script.ems_notify
+          data:
+            title: "🫧 Pralka zaplanowana"
+            message: >-
+              Start o {{ as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M') }}.
+              {% set s = as_datetime(states('input_datetime.suszarka_planned_start')) %}
+              {% if s is not none and s.year > 2000 %} Suszarka: {{ s | as_local | strftime('%H:%M') }}.{% endif %}
 
 - id: agd_pralka_executor
   alias: "AGD Pralka: Executor — start o zaplanowanej godzinie"
