@@ -12,6 +12,9 @@ views:
           - input_boolean.battery_charge_from_grid
           - input_boolean.battery_discharge_to_grid
           - input_boolean.pv_discharge_to_grid
+          - input_boolean.magazyn_doladowanie_pod_eksport_poranek
+          - input_boolean.magazyn_doladowanie_pod_eksport_wieczor
+          - input_boolean.ems_powiadomienia
           - input_number.manual_battery_charge_limit
           - sensor.solarman_battery_safe
           - sensor.ems1_podsumowanie
@@ -42,7 +45,160 @@ views:
         title: Kontekst energii
         entities:
           - sensor.solarman_microinverter_power_safe
+          - sensor.solaredge_ac_power
+          - sensor.srednia_moc_z_pv_5_minut
+          - sensor.maks_moc_pv_dzis
           - sensor.moc_pobierana_przez_dom_safe
+          - sensor.moc_pobierana_oddawana_z_sieci
+          - sensor.solarman_battery_power
           - sensor.solarman_battery_safe
+
+      - type: entities
+        title: Ceny energii
+        entities:
           - sensor.rce_prices_today_scaled
+          - sensor.rce_prices_tomorrow_scaled
+          - sensor.rce_prices_today
+          - sensor.rce_prices_tomorrow
           - sensor.g12_prices_today
+
+      - type: horizontal-stack
+        cards:
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            span:
+              start: day
+            update_interval: 15min
+            experimental:
+              color_threshold: true
+            header:
+              show: true
+              title: RCE + VAT dzis
+              show_states: true
+              colorize_states: true
+            series:
+              - entity: sensor.rce_prices_today_scaled
+                name: RCE + VAT
+                show:
+                  in_header: true
+                  in_chart: false
+                stroke_width: 0
+              - entity: sensor.rce_prices_today_scaled
+                attribute: value
+                name: RCE + VAT
+                data_generator: |
+                  return (entity.attributes.value || []).map(item => {
+                    return [new Date(item.dtime.replace(" ", "T")).getTime() - 900000, Number(item.rce_pln)];
+                  }).filter(point => Number.isFinite(point[1]));
+                type: line
+                curve: stepline
+                stroke_width: 4
+                extend_to: false
+                color_threshold:
+                  - value: 0
+                    color: red
+                  - value: 300
+                    color: orange
+                  - value: 500
+                    color: yellow
+                  - value: 700
+                    color: green
+                show:
+                  in_header: false
+                  in_chart: true
+                  legend_value: false
+            now:
+              show: true
+              label: Teraz
+              color: red
+            apex_config:
+              chart:
+                height: 300
+                parentHeightOffset: 0
+              legend:
+                show: false
+
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            span:
+              start: day
+              offset: +1d
+            update_interval: 15min
+            experimental:
+              color_threshold: true
+            header:
+              show: true
+              title: RCE + VAT jutro
+              show_states: true
+              colorize_states: true
+            series:
+              - entity: sensor.rce_prices_tomorrow_scaled
+                attribute: value
+                name: RCE + VAT jutro
+                data_generator: |
+                  const h = new Date().getHours();
+                  const prices = entity.attributes.value || [];
+                  const item = prices.find(p => new Date(p.dtime.replace(" ", "T")).getHours() === h);
+                  return item ? [[new Date().getTime(), Number(item.rce_pln)]] : [];
+                show:
+                  in_header: true
+                  in_chart: false
+                  legend_value: false
+              - entity: sensor.rce_prices_tomorrow_scaled
+                attribute: value
+                name: RCE + VAT jutro
+                data_generator: |
+                  return (entity.attributes.value || []).map(item => {
+                    return [new Date(item.dtime.replace(" ", "T")).getTime() - 900000, Number(item.rce_pln)];
+                  }).filter(point => Number.isFinite(point[1]));
+                type: line
+                curve: stepline
+                stroke_width: 4
+                extend_to: false
+                color_threshold:
+                  - value: 0
+                    color: red
+                  - value: 300
+                    color: orange
+                  - value: 500
+                    color: yellow
+                  - value: 700
+                    color: green
+                show:
+                  in_header: false
+                  in_chart: true
+                  legend_value: false
+            apex_config:
+              chart:
+                height: 300
+                parentHeightOffset: 0
+              legend:
+                show: false
+
+      - type: entities
+        title: Produkcja i prognozy energii
+        entities:
+          - sensor.solarman_microinverter_energy_today
+          - sensor.solarman_microinverter_energy_today_safe
+          - sensor.solaredge_ac_energy_kwh
+          - sensor.energy_production_today_remaining
+          - sensor.energy_production_tomorrow
+          - sensor.solcast_pv_forecast_prognoza_na_dzisiaj
+          - sensor.solcast_pv_forecast_pozostala_prognoza_na_dzis
+          - sensor.solcast_pv_forecast_prognoza_na_jutro
+          - var.spill_poranny
+
+      - type: entities
+        title: Import, eksport i bateria
+        entities:
+          - sensor.solarman_daily_energy_bought_safe
+          - sensor.solarman_daily_energy_sold_safe
+          - sensor.solarman_total_energy_bought_safe
+          - sensor.solarman_total_energy_sold_safe
+          - sensor.solarman_total_battery_charge_safe
+          - sensor.solarman_total_battery_discharge_safe
+
+      - type: entities
+        title: Automatyzacje energii
+        entities:
+          - automation.grzanie_basenu_na_pv
