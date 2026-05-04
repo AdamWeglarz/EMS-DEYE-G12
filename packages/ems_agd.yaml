@@ -54,9 +54,7 @@ automation:
             - service: script.ems_notify
               data:
                 title: "🌀 Suszarka zaplanowana"
-                message: >-
-                  Start o {{ as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M') }}.
-                  {{ ' Pralka: ' ~ (as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M')) ~ '.' if as_datetime(states('input_datetime.pralka_planned_start')) is not none and as_datetime(states('input_datetime.pralka_planned_start')).year > 2000 else '' }}
+                message: "{{ 'Start o ' ~ states('input_datetime.suszarka_planned_start')[11:16] ~ '.' ~ (' Pralka: ' ~ states('input_datetime.pralka_planned_start')[11:16] ~ '.' if states('input_datetime.pralka_planned_start') | length > 15 else '') }}"
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -77,9 +75,7 @@ automation:
             - service: script.ems_notify
               data:
                 title: "🌀 Suszarka zaplanowana"
-                message: >-
-                  Start o {{ as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M') }}.
-                  {{ ' Pralka: ' ~ (as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M')) ~ '.' if as_datetime(states('input_datetime.pralka_planned_start')) is not none and as_datetime(states('input_datetime.pralka_planned_start')).year > 2000 else '' }}
+                message: "{{ 'Start o ' ~ states('input_datetime.suszarka_planned_start')[11:16] ~ '.' ~ (' Pralka: ' ~ states('input_datetime.pralka_planned_start')[11:16] ~ '.' if states('input_datetime.pralka_planned_start') | length > 15 else '') }}"
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -121,9 +117,7 @@ automation:
         - service: script.ems_notify
           data:
             title: "🌀 Suszarka zaplanowana"
-            message: >-
-              Start o {{ as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M') }}.
-              {{ ' Pralka: ' ~ (as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M')) ~ '.' if as_datetime(states('input_datetime.pralka_planned_start')) is not none and as_datetime(states('input_datetime.pralka_planned_start')).year > 2000 else '' }}
+            message: "{{ 'Start o ' ~ states('input_datetime.suszarka_planned_start')[11:16] ~ '.' ~ (' Pralka: ' ~ states('input_datetime.pralka_planned_start')[11:16] ~ '.' if states('input_datetime.pralka_planned_start') | length > 15 else '') }}"
 
 - id: agd_suszarka_executor
   alias: "AGD Suszarka: Executor — start o zaplanowanej godzinie"
@@ -250,9 +244,7 @@ automation:
             - service: script.ems_notify
               data:
                 title: "🫧 Pralka zaplanowana"
-                message: >-
-                  Start o {{ as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M') }}.
-                  {{ ' Suszarka: ' ~ (as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M')) ~ '.' if as_datetime(states('input_datetime.suszarka_planned_start')) is not none and as_datetime(states('input_datetime.suszarka_planned_start')).year > 2000 else '' }}
+                message: "{{ 'Start o ' ~ states('input_datetime.pralka_planned_start')[11:16] ~ '.' ~ (' Suszarka: ' ~ states('input_datetime.suszarka_planned_start')[11:16] ~ '.' if states('input_datetime.suszarka_planned_start') | length > 15 else '') }}"
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -273,9 +265,7 @@ automation:
             - service: script.ems_notify
               data:
                 title: "🫧 Pralka zaplanowana"
-                message: >-
-                  Start o {{ as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M') }}.
-                  {{ ' Suszarka: ' ~ (as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M')) ~ '.' if as_datetime(states('input_datetime.suszarka_planned_start')) is not none and as_datetime(states('input_datetime.suszarka_planned_start')).year > 2000 else '' }}
+                message: "{{ 'Start o ' ~ states('input_datetime.pralka_planned_start')[11:16] ~ '.' ~ (' Suszarka: ' ~ states('input_datetime.suszarka_planned_start')[11:16] ~ '.' if states('input_datetime.suszarka_planned_start') | length > 15 else '') }}"
         - conditions:
             - condition: time
               after: "06:00:00"
@@ -317,9 +307,7 @@ automation:
         - service: script.ems_notify
           data:
             title: "🫧 Pralka zaplanowana"
-            message: >-
-              Start o {{ as_datetime(states('input_datetime.pralka_planned_start')) | as_local | strftime('%H:%M') }}.
-              {{ ' Suszarka: ' ~ (as_datetime(states('input_datetime.suszarka_planned_start')) | as_local | strftime('%H:%M')) ~ '.' if as_datetime(states('input_datetime.suszarka_planned_start')) is not none and as_datetime(states('input_datetime.suszarka_planned_start')).year > 2000 else '' }}
+            message: "{{ 'Start o ' ~ states('input_datetime.pralka_planned_start')[11:16] ~ '.' ~ (' Suszarka: ' ~ states('input_datetime.suszarka_planned_start')[11:16] ~ '.' if states('input_datetime.suszarka_planned_start') | length > 15 else '') }}"
 
 - id: agd_pralka_executor
   alias: "AGD Pralka: Executor — start o zaplanowanej godzinie"
