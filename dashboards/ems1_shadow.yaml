@@ -199,8 +199,6 @@ views:
           - sensor.solarman_microinverter_energy_today
           - sensor.solarman_microinverter_energy_today_safe
           - sensor.solaredge_ac_energy_kwh
-          - sensor.energy_production_today_remaining
-          - sensor.energy_production_tomorrow
           - sensor.solcast_pv_forecast_prognoza_na_dzisiaj
           - sensor.solcast_pv_forecast_pozostala_prognoza_na_dzis
           - sensor.solcast_pv_forecast_prognoza_na_jutro
