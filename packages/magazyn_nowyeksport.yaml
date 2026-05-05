@@ -797,6 +797,45 @@ automation:
           soc_stop_full_rano: "{{ pack.split('###')[46] | int(25) }}"
           house_kwh_this_slot_rano: "{{ pack.split('###')[47] | float(0) }}"
 
+      # --- EMS1 plan vs realizacja: zamknij poprzedni slot, otwórz nowy ---
+      - variables:
+          ems1_total_sold_now: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
+          ems1_slot_snap_prev: "{{ states('var.ems1_slot_snap_kwh') | float(0) }}"
+          ems1_is_first_slot: "{{ now_hm == '06:00' }}"
+          ems1_actual_prev_slot: >
+            {% set delta = ems1_total_sold_now - ems1_slot_snap_prev %}
+            {{ [delta, 0] | max | round(4) }}
+
+      - service: var.set
+        data:
+          entity_id: var.ems1_session_actual_total_kwh
+          value: >
+            {% if ems1_is_first_slot %}
+              0
+            {% else %}
+              {{ ((states('var.ems1_session_actual_total_kwh') | float(0)) + ems1_actual_prev_slot) | round(4) }}
+            {% endif %}
+
+      - service: var.set
+        data:
+          entity_id: var.ems1_session_plan_total_kwh
+          value: >
+            {% if ems1_is_first_slot %}
+              {{ current_plan_energy | float(0) | round(4) }}
+            {% else %}
+              {{ ((states('var.ems1_session_plan_total_kwh') | float(0)) + (current_plan_energy | float(0))) | round(4) }}
+            {% endif %}
+
+      - service: var.set
+        data:
+          entity_id: var.ems1_slot_snap_kwh
+          value: "{{ ems1_total_sold_now }}"
+          attributes:
+            slot: "{{ current_slot_period }}"
+            plan_kwh: "{{ current_plan_energy | round(4) }}"
+            actual_prev_kwh: "{{ ems1_actual_prev_slot | round(4) }}"
+            first_slot: "{{ ems1_is_first_slot }}"
+
       - service: var.set
         data:
           entity_id: var.min_soc_dynamic_13
@@ -1108,9 +1147,17 @@ automation:
                 data:
                   title: "📈 Podsumowanie porannego eksportu"
                   message: >
+                    {% set sess_plan = states('var.ems1_session_plan_total_kwh') | float(0) %}
+                    {% set sess_actual = states('var.ems1_session_actual_total_kwh') | float(0) %}
+                    {% set eff = (sess_actual / sess_plan * 100) | round(1) if sess_plan > 0.01 else 0 %}
+                    📊 Plan vs Realizacja (sesja 06–13):
+                    - Plan:        {{ sess_plan | round(2) }} kWh
+                    - Realizacja:  {{ sess_actual | round(2) }} kWh
+                    - Efektywność: {{ eff }}%
+
+                    📋 Total dzienny: {{ energy_sold | round(2) }} kWh
+
                     🔄 Fizyczny spill od teraz do końca produkcji ({{ '%02d:%02d' | format(pv_end_slot_excl // 2, (pv_end_slot_excl % 2) * 30) }}): {{ pozostalo | round(2) }} kWh
-                    ✅ Sprzedano: {{ energy_sold | round(2) }} kWh
-                    📦 Plan eksportu: {{ plan_sum | round(2) }} kWh
                     🔋 SOC końcowy: {{ soc_current | round(1) }}%
                     🛡️ Min SOC do 13:00: {{ min_soc_dynamic_13 }}%
                     🛡️ Semi floor: {{ semi_soc_floor_pct }}%
@@ -1888,6 +1935,45 @@ automation:
           reserve_do_konca_godziny_kwh: "{{ pack.split('###')[26] | float(0) }}"
           house_kwh_this_slot: "{{ pack.split('###')[27] | float(0) }}"
   
+      # --- EMS1 plan vs realizacja: zamknij poprzedni slot, otwórz nowy ---
+      - variables:
+          ems1_total_sold_now: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
+          ems1_slot_snap_prev: "{{ states('var.ems1_slot_snap_kwh') | float(0) }}"
+          ems1_is_first_slot_w: "{{ t_now == '15:00' }}"
+          ems1_actual_prev_slot_w: >
+            {% set delta = ems1_total_sold_now - ems1_slot_snap_prev %}
+            {{ [delta, 0] | max | round(4) }}
+
+      - service: var.set
+        data:
+          entity_id: var.ems1_session_actual_total_kwh
+          value: >
+            {% if ems1_is_first_slot_w %}
+              0
+            {% else %}
+              {{ ((states('var.ems1_session_actual_total_kwh') | float(0)) + ems1_actual_prev_slot_w) | round(4) }}
+            {% endif %}
+
+      - service: var.set
+        data:
+          entity_id: var.ems1_session_plan_total_kwh
+          value: >
+            {% if ems1_is_first_slot_w %}
+              {{ current_slot_export_energy | float(0) | round(4) }}
+            {% else %}
+              {{ ((states('var.ems1_session_plan_total_kwh') | float(0)) + (current_slot_export_energy | float(0))) | round(4) }}
+            {% endif %}
+
+      - service: var.set
+        data:
+          entity_id: var.ems1_slot_snap_kwh
+          value: "{{ ems1_total_sold_now }}"
+          attributes:
+            slot: "{{ slot_period }}"
+            plan_kwh: "{{ current_slot_export_energy | round(4) }}"
+            actual_prev_kwh: "{{ ems1_actual_prev_slot_w | round(4) }}"
+            first_slot: "{{ ems1_is_first_slot_w }}"
+
       - service: var.set
         data:
           entity_id: var.magazyn_soc_stop_export_wieczor
@@ -2055,14 +2141,25 @@ automation:
                 data:
                   title: "📈 Podsumowanie eksportu wieczornego"
                   message: >
-                    📦 Plan:
+                    {% set sess_plan_w = states('var.ems1_session_plan_total_kwh') | float(0) %}
+                    {% set sess_actual_w = states('var.ems1_session_actual_total_kwh') | float(0) %}
+                    {% set eff_w = (sess_actual_w / sess_plan_w * 100) | round(1) if sess_plan_w > 0.01 else 0 %}
+                    {% set daily_sold = states('sensor.solarman_daily_energy_sold') | float(0) %}
+                    📊 Plan vs Realizacja (sesja 15–22):
+                    - Plan:        {{ sess_plan_w | round(2) }} kWh
+                    - Realizacja:  {{ sess_actual_w | round(2) }} kWh
+                    - Efektywność: {{ eff_w }}%
+
+                    📋 Total dzienny: {{ daily_sold | round(2) }} kWh
+
+                    📦 Plan ostatniego slotu:
                     - Slotów: {{ plan_count }}
                     - FULL kandydatów: {{ full_candidate_count }}
                     - PARTIAL kandydatów: {{ partial_candidate_count }}
                     - Energia z baterii FULL: {{ plan_batt_sum_full | round(2) }} kWh
                     - Energia z baterii PARTIAL: {{ plan_batt_sum_partial | round(2) }} kWh
                     - Szac. eksport: {{ plan_export_sum | round(2) }} kWh
-  
+
                     🔋 SOC teraz: {{ soc_now | round(1) }}%
                     🛡️ SOC stop dla tego slotu: {{ soc_stop_target }}%
                     ☀️ PV debug: {{ pv_hours }}

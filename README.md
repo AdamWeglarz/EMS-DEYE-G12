@@ -424,6 +424,13 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
   - Dodane atrybuty diagnostyczne: `battery_discharge_today_kwh`, `battery_to_grid_kwh`
   - Tryb `pv_zaniklo`: zmiana nazwy z `limit_brutto_minus_export_po_13` na `limit_brutto_minus_battery_to_grid`
 
+### 2026-05-06
+- **EMS1: śledzenie plan vs realizacja per slot** (`packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
+  - 3 nowe `var`: `ems1_slot_snap_kwh` (snapshot licznika eksportu na start slotu), `ems1_session_plan_total_kwh` (suma zaplanowanych kWh sesji), `ems1_session_actual_total_kwh` (suma realnego eksportu sesji)
+  - Na starcie każdego 15-min slotu (06–13 i 15–22): zamknięcie poprzedniego slotu przez delta `solarman_total_energy_sold_safe`, akumulacja do `session_actual`; plan bieżącego slotu z `current_plan_energy` / `current_slot_export_energy` dodany do `session_plan`
+  - Reset akumulatorów na start sesji (06:00 i 15:00)
+  - Podsumowania 13:00 i 21:45 rozszerzone o sekcję **Plan vs Realizacja**: plan sesji, realizacja, efektywność (%), total dzienny z `solarman_daily_energy_sold`
+
 ### 2026-04-24 (3)
 - **Domykacz HH:45 — PV-first** (`packages/magazyn_nowyeksport.yaml`, v2.0):
   - Jeśli nadwyżka PV (5-min avg) × 15 min ≥ deficyt godzinowy → domykacz włącza `pv_discharge_to_grid` zamiast BAT

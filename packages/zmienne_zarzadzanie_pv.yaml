@@ -420,3 +420,27 @@ var:
     icon: mdi:target
     initial_value: 0
     restore: false
+
+  # --- EMS1 plan vs realizacja ---
+  ems1_slot_snap_kwh:
+    unique_id: ems1_slot_snap_kwh
+    friendly_name: "EMS1: snapshot eksportu na start slotu"
+    icon: mdi:camera
+    initial_value: 0
+    restore: true
+
+  ems1_session_plan_total_kwh:
+    unique_id: ems1_session_plan_total_kwh
+    friendly_name: "EMS1: plan sesji (suma slotów)"
+    icon: mdi:clipboard-arrow-right-outline
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  ems1_session_actual_total_kwh:
+    unique_id: ems1_session_actual_total_kwh
+    friendly_name: "EMS1: realizacja sesji (suma slotów)"
+    icon: mdi:clipboard-check-outline
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
