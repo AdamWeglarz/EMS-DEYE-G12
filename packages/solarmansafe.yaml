@@ -153,6 +153,28 @@ template:
       availability: true
 
   - sensor:
+    - name: "Solarman Power Losses Safe"
+      unique_id: solarman_power_losses_safe
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      icon: mdi:lightning-bolt-circle
+      state: >
+        {% set source = states('sensor.solarman_power_losses') %}
+        {% set prev_s = this.state %}
+        {% if source in ['unavailable', 'unknown', 'none', ''] %}
+          {{ prev_s if prev_s not in ['unavailable', 'unknown', 'none', ''] else 0 }}
+        {% else %}
+          {% set power = source | float(0) %}
+          {% if power < 0 or power > 3000 %}
+            {{ prev_s if prev_s not in ['unavailable', 'unknown', 'none', ''] else 0 }}
+          {% else %}
+            {{ power }}
+          {% endif %}
+        {% endif %}
+      availability: true
+
+  - sensor:
     - name: "Moc pobierana / oddawana z sieci"
       unique_id: grid_power_filtered
       unit_of_measurement: "W"
