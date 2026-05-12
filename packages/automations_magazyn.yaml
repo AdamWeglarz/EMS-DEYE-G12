@@ -1180,12 +1180,16 @@ automation:
 
           {# ===== Bazowy plan poranny ===== #}
           {% set E6_plan_required = [E6_req_floor, E6_req_floor_rano, E6_req_target] | max %}
-          {% set E6_plan = [E6_plan_required, E6_safe_max] | min %}
+          {% set E6_plan_soft_required = [E6_req_floor, E6_req_target] | max %}
+          {% set E6_plan_soft = [E6_plan_soft_required, E6_safe_max] | min %}
+          {# var.magazyn_soc_min_rano_percent jest twardym floor rano: nie obcinaj go limitem spillu PV. #}
+          {% set E6_plan = [E6_plan_soft, E6_req_floor_rano] | max %}
           {% if E6_plan < 0 %}{% set E6_plan = 0 %}{% endif %}
           {% if E6_plan > max_ene_u %}{% set E6_plan = max_ene_u %}{% endif %}
 
           {% set target_reachable = 'YES' if E6_req_target <= (E6_safe_max + 0.01) else 'NO' %}
 
+          {% set grid_add_floor_rano = [E6_req_floor_rano - E6_base, 0] | max %}
           {% set grid_add_u = [E6_plan - E6_base, 0] | max %}
           {% set grid_add_u = [grid_add_u, (max_ene_u - E6_base)] | min %}
           {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
@@ -1216,7 +1220,7 @@ automation:
           {% if urlop_any %}
             {% set grid_add_u = grid_add_u + 1.0 %}
             {% set grid_add_u = [grid_add_u, (max_ene_u - E6_base)] | min %}
-            {% set grid_add_u = [grid_add_u, [E6_safe_max - E6_base, 0] | max] | min %}
+            {% set grid_add_u = [grid_add_u, [[E6_safe_max - E6_base, 0] | max, grid_add_floor_rano] | max] | min %}
             {% set E_start_u_new = E6_base + grid_add_u %}
             {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
             {% if cel < 25 %}{% set cel = 25 %}{% endif %}
@@ -1423,6 +1427,7 @@ automation:
             " | E6_req_floor:" ~ E6_req_floor|round(2) ~ "kWh" ~
             " | E6_req_floor_rano:" ~ E6_req_floor_rano|round(2) ~ "kWh" ~
             " | soc_min_rano:" ~ soc_min_rano|round(0) ~ "%" ~
+            " | hard_floor_rano:" ~ ('YES' if E6_req_floor_rano > E6_safe_max else 'NO') ~
             " | Smin_do_11:" ~ ns.Smin_post_do_11|round(2) ~
             " | E6_safe_max:" ~ E6_safe_max|round(2) ~ "kWh" ~
             " | S_end:" ~ S_end_post|round(2) ~

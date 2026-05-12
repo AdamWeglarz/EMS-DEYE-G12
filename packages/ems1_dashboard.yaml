@@ -18,6 +18,37 @@ template:
             idle
           {% endif %}
 
+      - name: "EMS1: tryb działania"
+        unique_id: ems1_tryb_dzialania
+        icon: mdi:cog
+        state: >
+          {% if is_state('input_boolean.battery_charge_from_grid', 'on') %}
+            Ładowanie z sieci
+          {% elif is_state('input_boolean.battery_discharge_to_grid', 'on') %}
+            Eksport BAT+PV
+          {% elif is_state('input_boolean.pv_discharge_to_grid', 'on') %}
+            Eksport PV
+          {% else %}
+            Praca normalna
+          {% endif %}
+
+      - name: "EMS1: bilans dzienny"
+        unique_id: ems1_daily_balance_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:scale-balance
+        state: >
+          {{ (
+            states('sensor.solarman_microinverter_energy_today_safe') | float(0)
+            + states('sensor.solarman_daily_energy_bought_safe') | float(0)
+            + states('sensor.solarman_daily_battery_discharge') | float(0)
+            - states('sensor.solarman_daily_energy_sold_safe') | float(0)
+            - states('sensor.solarman_daily_battery_charge') | float(0)
+            - states('sensor.solarman_today_load_consumption') | float(0)
+            - states('sensor.solarman_today_losses') | float(0)
+          ) | round(4) }}
+
       - name: "EMS1: PV aktualne"
         unique_id: ems1_pv_actual_kw
         unit_of_measurement: "kW"
