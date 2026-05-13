@@ -623,7 +623,8 @@ template:
         device_class: monetary
         unit_of_measurement: "PLN/MWh"
         state: >
-          {% set h = now().hour %}
+          {% set slot_start_min = ((now().hour * 60 + now().minute) // 15) * 15 %}
+          {% set h = slot_start_min // 60 %}
           {% set c_ta = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) * 1000 %}
           {% set c_dr = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) * 1000 %}
           {{ (c_ta if (h < 6 or (13 <= h < 15) or h >= 22) else c_dr) | round(2) }}
@@ -648,7 +649,8 @@ template:
           {% if now().hour < 14 or (now().hour == 14 and now().minute < 12) %}
             unavailable
           {% else %}
-            {% set h = now().hour %}
+            {% set slot_start_min = ((now().hour * 60 + now().minute) // 15) * 15 %}
+            {% set h = slot_start_min // 60 %}
             {% set c_ta = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) * 1000 %}
             {% set c_dr = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) * 1000 %}
             {{ (c_ta if (h < 6 or (13 <= h < 15) or h >= 22) else c_dr) | round(2) }}
