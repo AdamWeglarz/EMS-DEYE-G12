@@ -4,6 +4,36 @@ views:
     path: ems1-shadow
     icon: mdi:home-lightning-bolt-outline
     cards:
+      - type: custom:sunsynk-power-flow-card
+        cardstyle: lite
+        show_solar: true
+        battery:
+          energy: 15000
+          shutdown_soc: 10
+          max_power: 5000
+          show_daily: true
+        solar:
+          max_power: 6000
+          mppts: 1
+          show_daily: true
+        load:
+          show_daily: true
+        grid:
+          show_daily_buy: true
+          show_daily_sell: true
+        entities:
+          battery_power_190: sensor.solarman_battery_power
+          battery_soc_184: sensor.solarman_battery_safe
+          grid_ct_power_172: sensor.grid_power_filtered
+          pv1_power_186: sensor.solarman_microinverter_power_safe
+          essential_power: sensor.moc_pobierana_przez_dom_safe
+          day_battery_charge_70: sensor.solarman_daily_battery_charge
+          day_battery_discharge_71: sensor.solarman_daily_battery_discharge
+          day_grid_import_76: sensor.solarman_daily_energy_bought_safe
+          day_grid_export_77: sensor.solarman_daily_energy_sold_safe
+          day_pv_energy_108: sensor.solarman_microinverter_energy_today_safe
+          day_load_energy_84: sensor.solarman_today_load_consumption
+
       - type: entities
         title: Decyzja EMS1
         entities:
