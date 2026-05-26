@@ -405,6 +405,12 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-05-24
+- **EMS2: blokada taniego eksportu PV poza spillem** (`custom_components/ems2/optimizer.py`):
+  - `pv_export` jest używany tylko dla spillu PV w strefie pośredniej: cena sprzedaży powyżej `var.magazyn_min_zysk_sprzedaz_pln_kwh`, ale poniżej progu opłacalności baterii.
+  - Poniżej marży solver zostaje w `idle`; powyżej progu baterii wybiera `discharge`/battery export z wyliczonym SOC końca slotu, zamiast zamrażać baterię przez `pv_export`.
+  - Dodano testy optimizerowe dla niskiej ceny, strefy pośredniej `pv_export` i opłacalnego eksportu baterii.
+
 ### 2026-04-24 (4)
 - **Domykacz HH:45 — action_mode w notyfikacji** (`packages/magazyn_nowyeksport.yaml`):
   - Tytuł notyfikacji: `Domykacz HH:45 | <skip_reason> | <action_mode>` gdzie action_mode = `PV` / `BAT` / `SKIP`

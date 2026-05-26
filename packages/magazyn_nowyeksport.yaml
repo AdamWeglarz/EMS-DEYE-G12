@@ -260,7 +260,7 @@ automation:
                   {% set ts = item.period_start %}
                   {% set s_it = ts.hour * 2 + (ts.minute // 30) %}
                   {% if ts.date() == dzis_local and ts.hour >= 6 and ts.hour <= 21 %}
-                    {% set pv_value = item.pv_estimate | float(0) / 2 %}
+                    {% set pv_value = (item.get('pv_estimate') or item.get('pv_forecast') or 0) | float(0) / 2 %}
                     {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                   {% endif %}
                 {% endif %}
@@ -2368,7 +2368,7 @@ automation:
                   {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
                   {% if ts.date() == jutro and ts.hour >= 6 and ts.hour < 14 %}
                     {% set s_it = ts.hour * 2 + (ts.minute // 30) %}
-                    {% set pv_value = (item.pv_estimate or item.pv_forecast or 0) | float(0) / 2 %}
+                    {% set pv_value = (item.get('pv_estimate') or item.get('pv_forecast') or 0) | float(0) / 2 %}
                     {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
                     {% set nsP.count = nsP.count + 1 %}
                   {% endif %}
