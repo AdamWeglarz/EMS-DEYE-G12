@@ -2234,6 +2234,98 @@ automation:
           target_final_soc: "{{ wyniki_pakiet.split('###')[1] | float(0) }}"
           mode: "{{ wyniki_pakiet.split('###')[17] }}"
 
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_import_start_popoludnie_kwh
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ states('sensor.solarman_total_energy_bought_safe') | float(0) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_export_start_popoludnie_kwh
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_battery_charge_start_popoludnie_kwh
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ states('sensor.solarman_total_battery_charge_safe') | float(0) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_battery_discharge_start_popoludnie_kwh
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ states('sensor.solarman_total_battery_discharge_safe') | float(0) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_load_start_popoludnie_kwh
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ states('sensor.solarman_total_load_consumption_safe') | float(0) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_pv_start_popoludnie_kwh
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ states('sensor.solarman_microinverter_energy_today_safe') | float(0) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_target_popoludnie_kwh
+        value: >-
+          {% if wyniki_pakiet.split('###')[13] == 'ON' %}
+            {{ wyniki_pakiet.split('###')[3] | float(0) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          mode: "{{ wyniki_pakiet.split('###')[17] }}"
+          source: "grid_add_total_u"
+
     - service: input_number.set_value
       target:
         entity_id: input_number.manual_battery_charge_limit
@@ -2267,6 +2359,8 @@ automation:
       data:
         title: "POPOŁUDNIE 13-22 | GRID: {{ wyniki_pakiet.split('###')[13] }} | TRYB: {{ wyniki_pakiet.split('###')[17] }}"
         message: |-
+          WYSTĄPIENIE: {{ now().strftime('%Y-%m-%d %H:%M:%S %z') }}
+
           TRYB: {{ wyniki_pakiet.split('###')[17] }}
           BLOKADA SPILL: {{ wyniki_pakiet.split('###')[21] }}
 
@@ -2307,6 +2401,7 @@ automation:
 
           WATCHDOG STOP GRID:
           - SOC stop ładowania z sieci: {{ wyniki_pakiet.split('###')[31] }}%
+          - Cel importu z sieci: {{ wyniki_pakiet.split('###')[3] }} kWh
           - PV credit do końca dnia: {{ wyniki_pakiet.split('###')[32] }} kWh
           - PV credit efektywny (x0.9): {{ wyniki_pakiet.split('###')[33] }} kWh
 
@@ -2336,8 +2431,8 @@ automation:
 
 ###############################################################################
 # WATCHDOG STOP ŁADOWANIA Z SIECI POPOŁUDNIE
-# Wyłącza battery_charge_from_grid, gdy osiągnięto SOC,
-# przy którym resztę do końca dnia dowiezie PV netto * 0.9.
+# Wyłącza battery_charge_from_grid po kupieniu zaplanowanej energii do baterii.
+# SOC stop zostaje tylko fallbackiem, gdy nie ma ustawionego celu kWh.
 ###############################################################################
 
 - alias: "Magazyn: Watchdog stop ładowania popołudnie PV"
@@ -2347,6 +2442,45 @@ automation:
   trigger:
     - platform: state
       entity_id: sensor.solarman_battery_safe
+    - platform: state
+      entity_id: sensor.solarman_total_energy_bought_safe
+    - platform: state
+      entity_id:
+        - sensor.solarman_total_energy_sold_safe
+        - sensor.solarman_total_battery_charge_safe
+        - sensor.solarman_total_battery_discharge_safe
+        - sensor.solarman_total_load_consumption_safe
+        - sensor.solarman_microinverter_energy_today_safe
+
+  variables:
+    grid_import_start: "{{ states('var.magazyn_grid_charge_import_start_popoludnie_kwh') | float(0) }}"
+    grid_export_start: "{{ states('var.magazyn_grid_charge_export_start_popoludnie_kwh') | float(0) }}"
+    batt_charge_start: "{{ states('var.magazyn_grid_charge_battery_charge_start_popoludnie_kwh') | float(0) }}"
+    batt_discharge_start: "{{ states('var.magazyn_grid_charge_battery_discharge_start_popoludnie_kwh') | float(0) }}"
+    load_start: "{{ states('var.magazyn_grid_charge_load_start_popoludnie_kwh') | float(0) }}"
+    pv_start: "{{ states('var.magazyn_grid_charge_pv_start_popoludnie_kwh') | float(0) }}"
+    grid_import_target: "{{ states('var.magazyn_grid_charge_target_popoludnie_kwh') | float(0) }}"
+    grid_import_now: "{{ states('sensor.solarman_total_energy_bought_safe') | float(0) }}"
+    grid_export_now: "{{ states('sensor.solarman_total_energy_sold_safe') | float(0) }}"
+    batt_charge_now: "{{ states('sensor.solarman_total_battery_charge_safe') | float(0) }}"
+    batt_discharge_now: "{{ states('sensor.solarman_total_battery_discharge_safe') | float(0) }}"
+    load_now: "{{ states('sensor.solarman_total_load_consumption_safe') | float(0) }}"
+    pv_now: "{{ states('sensor.solarman_microinverter_energy_today_safe') | float(0) }}"
+    grid_import_delta: "{{ [grid_import_now | float(0) - grid_import_start | float(0), 0] | max }}"
+    grid_export_delta: "{{ [grid_export_now | float(0) - grid_export_start | float(0), 0] | max }}"
+    batt_charge_delta: "{{ [batt_charge_now | float(0) - batt_charge_start | float(0), 0] | max }}"
+    batt_discharge_delta: "{{ [batt_discharge_now | float(0) - batt_discharge_start | float(0), 0] | max }}"
+    load_delta: "{{ [load_now | float(0) - load_start | float(0), 0] | max }}"
+    pv_delta: "{{ [pv_now | float(0) - pv_start | float(0), 0] | max }}"
+    pv_after_export_delta: "{{ [pv_delta | float(0) - grid_export_delta | float(0), 0] | max }}"
+    non_grid_for_load_delta: "{{ pv_after_export_delta | float(0) + batt_discharge_delta | float(0) }}"
+    estimated_house_grid_import_delta: "{{ [load_delta | float(0) - non_grid_for_load_delta | float(0), 0] | max }}"
+    estimated_grid_charge_delta_raw: "{{ [grid_import_delta | float(0) - estimated_house_grid_import_delta | float(0), 0] | max }}"
+    estimated_grid_charge_delta: "{{ [estimated_grid_charge_delta_raw | float(0), batt_charge_delta | float(0)] | min }}"
+    soc_stop_grid: "{{ states('var.magazyn_soc_stop_ladowanie_popoludnie') | float(100) }}"
+    soc_now: "{{ states('sensor.solarman_battery_safe') | float(0) }}"
+    stop_by_import: "{{ grid_import_target | float(0) > 0.01 and estimated_grid_charge_delta | float(0) >= grid_import_target | float(0) }}"
+    stop_by_soc_fallback: "{{ grid_import_target | float(0) <= 0.01 and soc_stop_grid | float(100) < 100 and soc_now | float(0) >= soc_stop_grid | float(100) }}"
 
   condition:
     - condition: time
@@ -2359,12 +2493,7 @@ automation:
 
     - condition: template
       value_template: >
-        {{ states('input_number.magazyn_soc_stop_ladowanie_popoludnie') | float(100) < 100 }}
-
-    - condition: template
-      value_template: >
-        {{ states('sensor.solarman_battery_safe') | float(0)
-           >= states('input_number.magazyn_soc_stop_ladowanie_popoludnie') | float(100) }}
+        {{ stop_by_import or stop_by_soc_fallback }}
 
   action:
     - service: input_boolean.turn_off
@@ -2383,13 +2512,38 @@ automation:
       data:
         title: "⏹️ STOP ładowania popołudniowego z sieci"
         message: >
-          SOC baterii osiągnął próg stop:
-          - SOC teraz: {{ states('sensor.solarman_battery_safe') | float(0) | round(1) }}%
-          - SOC stop grid: {{ states('input_number.magazyn_soc_stop_ladowanie_popoludnie') | float(0) | round(1) }}%
+          Watchdog zatrzymał ładowanie popołudniowe z sieci.
 
-          Założenie:
-          pozostałe dodatnie PV netto do końca dnia powinno dowieźć brakującą energię
-          bez dalszego ładowania z gniazdka.
+          Powód:
+          {% if stop_by_import %}
+          kupiono zaplanowaną energię z sieci do ładowania baterii.
+          {% else %}
+          fallback SOC, brak aktywnego celu kWh.
+          {% endif %}
+
+          Bilans sesji:
+          - Import z sieci: {{ grid_import_delta | float(0) | round(3) }} kWh
+          - Eksport do sieci: {{ grid_export_delta | float(0) | round(3) }} kWh
+          - Ładowanie baterii: {{ batt_charge_delta | float(0) | round(3) }} kWh
+          - Rozładowanie baterii: {{ batt_discharge_delta | float(0) | round(3) }} kWh
+          - Konsumpcja domu: {{ load_delta | float(0) | round(3) }} kWh
+          - Produkcja PV: {{ pv_delta | float(0) | round(3) }} kWh
+
+          Import przypisany do ładowania:
+          - Szacowany import domu: {{ estimated_house_grid_import_delta | float(0) | round(3) }} kWh
+          - Kupiono do baterii: {{ estimated_grid_charge_delta | float(0) | round(3) }} kWh
+          - Cel sesji: {{ grid_import_target | float(0) | round(3) }} kWh
+
+          SOC:
+          - SOC teraz: {{ states('sensor.solarman_battery_safe') | float(0) | round(1) }}%
+          - SOC stop grid: {{ states('var.magazyn_soc_stop_ladowanie_popoludnie') | float(0) | round(1) }}%
+
+          PV może dalej ładować baterię bez kupowania energii z sieci.
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_target_popoludnie_kwh
+        value: 0
 
 - id: magazyn_stop_ladowania_popoludnie
   alias: "Magazyn: Stop ładowania popołudniowego (15:00)"
@@ -2410,6 +2564,11 @@ automation:
         entity_id: input_number.manual_battery_charge_limit
       data:
         value: 20
+    - alias: "Wyczyść cel importu sesji popołudniowej"
+      service: var.set
+      data:
+        entity_id: var.magazyn_grid_charge_target_popoludnie_kwh
+        value: 0
 
 - id: magazyn_soc_min_rano_pogoda
   alias: "Magazyn: Ustaw min SOC rano wg pogody (5:29)"

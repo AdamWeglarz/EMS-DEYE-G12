@@ -357,6 +357,62 @@ var:
     unit_of_measurement: "%"
     icon: mdi:battery-stop
 
+  magazyn_grid_charge_import_start_popoludnie_kwh:
+    unique_id: "magazyn_grid_charge_import_start_popoludnie_kwh"
+    friendly_name: "Magazyn - import start ładowania popołudnie"
+    initial_value: 0
+    unit_of_measurement: "kWh"
+    icon: mdi:transmission-tower-import
+    restore: true
+
+  magazyn_grid_charge_export_start_popoludnie_kwh:
+    unique_id: "magazyn_grid_charge_export_start_popoludnie_kwh"
+    friendly_name: "Magazyn - eksport start ładowania popołudnie"
+    initial_value: 0
+    unit_of_measurement: "kWh"
+    icon: mdi:transmission-tower-export
+    restore: true
+
+  magazyn_grid_charge_battery_charge_start_popoludnie_kwh:
+    unique_id: "magazyn_grid_charge_battery_charge_start_popoludnie_kwh"
+    friendly_name: "Magazyn - licznik ładowania baterii start popołudnie"
+    initial_value: 0
+    unit_of_measurement: "kWh"
+    icon: mdi:battery-plus
+    restore: true
+
+  magazyn_grid_charge_battery_discharge_start_popoludnie_kwh:
+    unique_id: "magazyn_grid_charge_battery_discharge_start_popoludnie_kwh"
+    friendly_name: "Magazyn - licznik rozładowania baterii start popołudnie"
+    initial_value: 0
+    unit_of_measurement: "kWh"
+    icon: mdi:battery-minus
+    restore: true
+
+  magazyn_grid_charge_load_start_popoludnie_kwh:
+    unique_id: "magazyn_grid_charge_load_start_popoludnie_kwh"
+    friendly_name: "Magazyn - konsumpcja start ładowania popołudnie"
+    initial_value: 0
+    unit_of_measurement: "kWh"
+    icon: mdi:home-lightning-bolt
+    restore: true
+
+  magazyn_grid_charge_pv_start_popoludnie_kwh:
+    unique_id: "magazyn_grid_charge_pv_start_popoludnie_kwh"
+    friendly_name: "Magazyn - PV start ładowania popołudnie"
+    initial_value: 0
+    unit_of_measurement: "kWh"
+    icon: mdi:solar-power
+    restore: true
+
+  magazyn_grid_charge_target_popoludnie_kwh:
+    unique_id: "magazyn_grid_charge_target_popoludnie_kwh"
+    friendly_name: "Magazyn - cel importu ładowania popołudnie"
+    initial_value: 0
+    unit_of_measurement: "kWh"
+    icon: mdi:battery-arrow-up
+    restore: true
+
   magazyn_soc_spill_bat_floor_percent:
     unique_id: "magazyn_soc_spill_bat_floor_percent"
     friendly_name: "Magazyn: SOC floor dla BAT spill (min SOC przy eksporcie BAT)"

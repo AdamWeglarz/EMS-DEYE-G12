@@ -405,6 +405,14 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-05-29
+- **EMS1: popołudniowy watchdog ładowania po bilansie kWh** (`packages/automations_magazyn.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
+  - Notyfikacja planu popołudniowego dostała znacznik czasu `WYSTĄPIENIE`, żeby łatwo odróżnić przebiegi 13:00/14:00/14:30/14:45.
+  - Watchdog stop ładowania popołudniowego czyta teraz `var.magazyn_soc_stop_ladowanie_popoludnie` zamiast nieistniejącego `input_number.*`.
+  - Dodano snapshoty sesji ładowania: import, eksport, ładowanie/rozładowanie baterii, konsumpcja domu i PV.
+  - Stop grid charge bazuje na wyliczeniu `kupione do baterii = min(max(import - szacowany import domu, 0), ładowanie baterii)`, a SOC jest tylko fallbackiem bez aktywnego celu kWh.
+  - Notyfikacja STOP pokazuje pełny bilans sesji i cel importu z sieci.
+
 ### 2026-05-24
 - **EMS2: blokada taniego eksportu PV poza spillem** (`custom_components/ems2/optimizer.py`):
   - `pv_export` jest używany tylko dla spillu PV w strefie pośredniej: cena sprzedaży powyżej `var.magazyn_min_zysk_sprzedaz_pln_kwh`, ale poniżej progu opłacalności baterii.
