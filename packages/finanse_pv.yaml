@@ -697,24 +697,39 @@ automation:
           prev_time_str: "{{ states('var.finanse_prev_trigger_time') }}"
 
       - variables:
+          prev_time_calc: >
+            {% if prev_time_str in ['unknown', 'unavailable', 'none', '', '2000-01-01 00:00:00'] %}
+              {{ (now() - timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S') }}
+            {% else %}
+              {{ prev_time_str }}
+            {% endif %}
+          prev_time_age_min: >
+            {% if prev_time_str in ['unknown', 'unavailable', 'none', '', '2000-01-01 00:00:00'] %}
+              999
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(as_datetime(prev_time_str))) / 60) | round(1) }}
+            {% endif %}
+          prev_time_is_fresh: "{{ (prev_time_age_min | float(999)) <= 45 }}"
+
+      - variables:
           # Delta — zabezpieczenie przed: spike >3 kWh/15min (>12 kW), reset licznika (delta<0), inicjalizacja (prev=0)
           delta_bought: >
             {% set d = bought_now - prev_bought %}
-            {{ d if (prev_bought > 0 and d >= 0 and d < 3) else 0 }}
+            {{ d if (prev_time_is_fresh | bool(false) and prev_bought > 0 and d >= 0 and d < 3) else 0 }}
           delta_sold: >
             {% set d = sold_now - prev_sold %}
-            {{ d if (prev_sold > 0 and d >= 0 and d < 3) else 0 }}
+            {{ d if (prev_time_is_fresh | bool(false) and prev_sold > 0 and d >= 0 and d < 3) else 0 }}
           delta_cons: >
             {% set d = cons_now - prev_cons %}
-            {{ d if (prev_cons > 0 and d >= 0 and d < 5) else 0 }}
+            {{ d if (prev_time_is_fresh | bool(false) and prev_cons > 0 and d >= 0 and d < 5) else 0 }}
 
           # Cena RCE dla slotu który właśnie minął: dtime = koniec slotu = prev_ts + 15min
           cena_sprzedazy_kwh: >
             {% set ceny = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
-            {% if prev_time_str == '2000-01-01 00:00:00' or ceny | length == 0 %}
+            {% if not (prev_time_is_fresh | bool(false)) or ceny | length == 0 %}
               0
             {% else %}
-              {% set prev_ts = as_local(as_datetime(prev_time_str)) %}
+              {% set prev_ts = as_local(as_datetime(prev_time_calc)) %}
               {% set slot_end = prev_ts + timedelta(minutes=15) %}
               {% set rce = namespace(v=0, found=false) %}
               {% for c in ceny %}
@@ -729,7 +744,7 @@ automation:
 
           # Cena G12 dla obliczanego slotu (prev_time = start slotu)
           cena_g12_kwh: >
-            {% set prev_ts = as_local(as_datetime(prev_time_str)) %}
+            {% set prev_ts = as_local(as_datetime(prev_time_calc)) %}
             {% set h = prev_ts.hour %}
             {% if (h >= 13 and h < 15) or h >= 22 or h < 6 %}
               {{ states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) }}
@@ -757,7 +772,7 @@ automation:
 
           # Cykl 6-6: eksport za tanio (06-22, RCE < G12_tańsza)
           slot_cykl_eksport_tanio_kwh: >
-            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% set h = as_local(as_datetime(prev_time_calc)).hour %}
             {% if h >= 6 and h < 22
                 and delta_sold | float(0) > 0
                 and cena_sprzedazy_kwh | float(0) < cena_g12_tansza_kwh | float(0.65) %}
@@ -770,7 +785,7 @@ automation:
 
           # Cykl 6-6: import nocny (22-06)
           slot_cykl_import_noc_kwh: >
-            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% set h = as_local(as_datetime(prev_time_calc)).hour %}
             {% if h >= 22 or h < 6 %}
               {{ delta_bought | float(0) }}
             {% else %}
@@ -781,7 +796,7 @@ automation:
 
           # Cykl 6-6: dobry eksport (06-22, RCE >= G12_tańsza + marża)
           slot_cykl_eksport_dobry_kwh: >
-            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% set h = as_local(as_datetime(prev_time_calc)).hour %}
             {% set marza = states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0.38) %}
             {% if h >= 6 and h < 22
                 and delta_sold | float(0) > 0
@@ -795,7 +810,7 @@ automation:
 
           # Cykl 6-6: import dzienny w drogiej strefie G12 (06-13 i 15-22, kupujemy z sieci)
           slot_cykl_import_dzien_drogi_kwh: >
-            {% set h = as_local(as_datetime(prev_time_str)).hour %}
+            {% set h = as_local(as_datetime(prev_time_calc)).hour %}
             {% if (h >= 6 and h < 13) or (h >= 15 and h < 22) %}
               {{ delta_bought | float(0) }}
             {% else %}
@@ -803,6 +818,25 @@ automation:
             {% endif %}
           slot_cykl_import_dzien_drogi_pln: >
             {{ (slot_cykl_import_dzien_drogi_kwh | float(0) * cena_g12_kwh | float(0)) | round(4) }}
+
+      # Zapisz poprzednie wartości od razu po policzeniu delt. Dzięki temu
+      # ewentualny błąd w dalszej części nie naliczy ponownie tego samego slotu.
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_bought_kwh
+          value: "{{ bought_now }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_sold_kwh
+          value: "{{ sold_now }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_cons_kwh
+          value: "{{ cons_now }}"
+      - service: var.set
+        data:
+          entity_id: var.finanse_prev_trigger_time
+          value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
       # Akumuluj do dziennych varów
       - service: var.set
@@ -901,24 +935,6 @@ automation:
           entity_id: var.finanse_cykl_import_dzien_drogi_pln
           value: >
             {{ (states('var.finanse_cykl_import_dzien_drogi_pln') | float(0) + slot_cykl_import_dzien_drogi_pln | float(0)) | round(4) }}
-
-      # Zapisz poprzednie wartości liczników i czas triggera
-      - service: var.set
-        data:
-          entity_id: var.finanse_prev_bought_kwh
-          value: "{{ bought_now }}"
-      - service: var.set
-        data:
-          entity_id: var.finanse_prev_sold_kwh
-          value: "{{ sold_now }}"
-      - service: var.set
-        data:
-          entity_id: var.finanse_prev_cons_kwh
-          value: "{{ cons_now }}"
-      - service: var.set
-        data:
-          entity_id: var.finanse_prev_trigger_time
-          value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
   # Reset o 23:59 — zapisz wczorajsze dane i wyzeruj akumulatory
   - id: finanse_pv_reset_dzienny

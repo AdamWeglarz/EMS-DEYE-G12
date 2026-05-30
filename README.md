@@ -405,6 +405,11 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-05-31
+- **EMS1: naprawa podwójnego naliczania kosztów finansowych** (`packages/finanse_pv.yaml`):
+  - Akumulacja finansów zeruje delty, gdy `var.finanse_prev_trigger_time` jest starszy niż 45 minut, zamiast naliczać w kółko ten sam stary przyrost licznika.
+  - Zapis `finanse_prev_*` wykonywany jest od razu po policzeniu delt, żeby błąd w dalszych akumulatorach cyklu 6-6 nie powodował ponownego księgowania tego samego slotu.
+
 ### 2026-05-30
 - **EMS1: notyfikacja osiągnięcia limitu ładowania 13:00** (`packages/automations_magazyn.yaml`, `packages/magazynlimity.yaml`):
   - Watchdog popołudniowy zatrzymuje ładowanie także po osiągnięciu limitu SOC ustawionego w planie 13:00 i wysyła notyfikację z powodem `limit SOC`.
