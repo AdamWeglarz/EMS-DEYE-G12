@@ -405,6 +405,12 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-05-30
+- **EMS1: notyfikacja osiągnięcia limitu ładowania 13:00** (`packages/automations_magazyn.yaml`, `packages/magazynlimity.yaml`):
+  - Watchdog popołudniowy zatrzymuje ładowanie także po osiągnięciu limitu SOC ustawionego w planie 13:00 i wysyła notyfikację z powodem `limit SOC`.
+  - Plan popołudniowy pokazuje wyliczenie limitu: `E_target`, `E_stop`, `PV credit`, floor i pojemność magazynu.
+  - `script.ems_notify` dopisuje `GODZINA WYWOŁANIA` do każdej notyfikacji EMS.
+
 ### 2026-05-29
 - **EMS1: popołudniowy watchdog ładowania po bilansie kWh** (`packages/automations_magazyn.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
   - Notyfikacja planu popołudniowego dostała znacznik czasu `WYSTĄPIENIE`, żeby łatwo odróżnić przebiegi 13:00/14:00/14:30/14:45.

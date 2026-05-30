@@ -2215,12 +2215,15 @@ automation:
           %}
           {% set ns.raport = ns.raport ~
             "\nSTOP_GRID | soc_stop:" ~ soc_stop_grid ~ "%" ~
+            " | target_soc:" ~ cel_final ~ "%" ~
+            " | E_target:" ~ E_target_u|round(2) ~ "kWh" ~
+            " | E_stop:" ~ E_stop_u|round(2) ~ "kWh" ~
             " | pv_credit_raw:" ~ ns_stop.pv_credit_u|round(2) ~ "kWh" ~
             " | pv_credit_eff:" ~ pv_credit_effective_u|round(2) ~ "kWh"
           %}
           {% set ns.raport = ns.raport ~ ns_stop.lines %}
 
-          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}
+          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}
 
     - service: var.set
       data:
@@ -2233,6 +2236,12 @@ automation:
           target_base_soc: "{{ wyniki_pakiet.split('###')[0] | float(0) }}"
           target_final_soc: "{{ wyniki_pakiet.split('###')[1] | float(0) }}"
           mode: "{{ wyniki_pakiet.split('###')[17] }}"
+          target_soc: "{{ wyniki_pakiet.split('###')[1] | float(0) }}"
+          target_energy_u_kwh: "{{ wyniki_pakiet.split('###')[34] | float(0) }}"
+          stop_energy_u_kwh: "{{ wyniki_pakiet.split('###')[35] | float(0) }}"
+          capacity_kwh: "{{ wyniki_pakiet.split('###')[36] | float(0) }}"
+          floor_energy_kwh: "{{ wyniki_pakiet.split('###')[37] | float(0) }}"
+          max_usable_energy_kwh: "{{ wyniki_pakiet.split('###')[38] | float(0) }}"
 
     - service: var.set
       data:
@@ -2325,6 +2334,12 @@ automation:
           last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
           mode: "{{ wyniki_pakiet.split('###')[17] }}"
           source: "grid_add_total_u"
+          target_soc: "{{ wyniki_pakiet.split('###')[1] | float(0) }}"
+          target_energy_u_kwh: "{{ wyniki_pakiet.split('###')[34] | float(0) }}"
+          stop_energy_u_kwh: "{{ wyniki_pakiet.split('###')[35] | float(0) }}"
+          soc_stop_grid: "{{ wyniki_pakiet.split('###')[31] | float(0) }}"
+          pv_credit_raw_kwh: "{{ wyniki_pakiet.split('###')[32] | float(0) }}"
+          pv_credit_effective_kwh: "{{ wyniki_pakiet.split('###')[33] | float(0) }}"
 
     - service: input_number.set_value
       target:
@@ -2401,9 +2416,14 @@ automation:
 
           WATCHDOG STOP GRID:
           - SOC stop ładowania z sieci: {{ wyniki_pakiet.split('###')[31] }}%
+          - Limit SOC ustawiony na falowniku: {{ wyniki_pakiet.split('###')[1] }}%
           - Cel importu z sieci: {{ wyniki_pakiet.split('###')[3] }} kWh
+          - Energia celu finalnego: {{ wyniki_pakiet.split('###')[34] }} kWh użyteczne
+          - Energia stop po odjęciu PV credit: {{ wyniki_pakiet.split('###')[35] }} kWh użyteczne
           - PV credit do końca dnia: {{ wyniki_pakiet.split('###')[32] }} kWh
           - PV credit efektywny (x0.9): {{ wyniki_pakiet.split('###')[33] }} kWh
+          - Wzór: SOC stop = (E_stop + floor_kWh) / pojemność * 100
+          - Parametry: floor={{ wyniki_pakiet.split('###')[37] }} kWh, pojemność={{ wyniki_pakiet.split('###')[36] }} kWh
 
           Okno 15–22:
           - Najgorsze saldo (Smin_post): {{ wyniki_pakiet.split('###')[9] }} kWh
@@ -2479,7 +2499,9 @@ automation:
     estimated_grid_charge_delta: "{{ [estimated_grid_charge_delta_raw | float(0), batt_charge_delta | float(0)] | min }}"
     soc_stop_grid: "{{ states('var.magazyn_soc_stop_ladowanie_popoludnie') | float(100) }}"
     soc_now: "{{ states('sensor.solarman_battery_safe') | float(0) }}"
+    manual_charge_limit: "{{ states('input_number.manual_battery_charge_limit') | float(20) }}"
     stop_by_import: "{{ grid_import_target | float(0) > 0.01 and estimated_grid_charge_delta | float(0) >= grid_import_target | float(0) }}"
+    stop_by_soc_limit: "{{ grid_import_target | float(0) > 0.01 and manual_charge_limit | float(20) > 20 and soc_now | float(0) >= manual_charge_limit | float(20) }}"
     stop_by_soc_fallback: "{{ grid_import_target | float(0) <= 0.01 and soc_stop_grid | float(100) < 100 and soc_now | float(0) >= soc_stop_grid | float(100) }}"
 
   condition:
@@ -2493,7 +2515,7 @@ automation:
 
     - condition: template
       value_template: >
-        {{ stop_by_import or stop_by_soc_fallback }}
+        {{ stop_by_import or stop_by_soc_limit or stop_by_soc_fallback }}
 
   action:
     - service: input_boolean.turn_off
@@ -2510,13 +2532,17 @@ automation:
 
     - service: script.ems_notify
       data:
-        title: "⏹️ STOP ładowania popołudniowego z sieci"
+        title: >-
+          ⏹️ STOP ładowania popołudniowego z sieci |
+          {% if stop_by_import %}cel kWh{% elif stop_by_soc_limit %}limit SOC{% else %}fallback SOC{% endif %}
         message: >
           Watchdog zatrzymał ładowanie popołudniowe z sieci.
 
           Powód:
           {% if stop_by_import %}
           kupiono zaplanowaną energię z sieci do ładowania baterii.
+          {% elif stop_by_soc_limit %}
+          ładowanie osiągnęło ustawiony limit SOC z planu 13:00.
           {% else %}
           fallback SOC, brak aktywnego celu kWh.
           {% endif %}
@@ -2533,10 +2559,19 @@ automation:
           - Szacowany import domu: {{ estimated_house_grid_import_delta | float(0) | round(3) }} kWh
           - Kupiono do baterii: {{ estimated_grid_charge_delta | float(0) | round(3) }} kWh
           - Cel sesji: {{ grid_import_target | float(0) | round(3) }} kWh
+          - Brakuje do celu kWh: {{ [grid_import_target | float(0) - estimated_grid_charge_delta | float(0), 0] | max | round(3) }} kWh
 
           SOC:
           - SOC teraz: {{ states('sensor.solarman_battery_safe') | float(0) | round(1) }}%
+          - Limit SOC z planu 13:00: {{ manual_charge_limit | float(20) | round(1) }}%
           - SOC stop grid: {{ states('var.magazyn_soc_stop_ladowanie_popoludnie') | float(0) | round(1) }}%
+
+          Wyliczenie limitu:
+          - Energia celu finalnego: {{ state_attr('var.magazyn_grid_charge_target_popoludnie_kwh', 'target_energy_u_kwh') | float(0) | round(3) }} kWh użyteczne
+          - Energia stop po PV credit: {{ state_attr('var.magazyn_grid_charge_target_popoludnie_kwh', 'stop_energy_u_kwh') | float(0) | round(3) }} kWh użyteczne
+          - PV credit raw: {{ state_attr('var.magazyn_grid_charge_target_popoludnie_kwh', 'pv_credit_raw_kwh') | float(0) | round(3) }} kWh
+          - PV credit efektywny: {{ state_attr('var.magazyn_grid_charge_target_popoludnie_kwh', 'pv_credit_effective_kwh') | float(0) | round(3) }} kWh
+          - Wzór: kupiono_do_baterii = min(max(import - import_domu, 0), ładowanie_baterii)
 
           PV może dalej ładować baterię bez kupowania energii z sieci.
 

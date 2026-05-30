@@ -20,7 +20,10 @@ script:
       - service: notify.persistent_notification
         data:
           title: "{{ title }}"
-          message: "{{ message }}"
+          message: |-
+            GODZINA WYWOŁANIA: {{ now().strftime('%Y-%m-%d %H:%M:%S %z') }}
+
+            {{ message }}
 
 var:
   przeniesionaenergia:
