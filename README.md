@@ -156,6 +156,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 4. Wyznacza limit doładowania potrzebny do pokrycia zużycia wieczornego z zapasem.
 5. Jeśli prognoza skoryg. < `var.magazyn_lowpv_threshold_popoludnie_kwh` (domyślnie 8 kWh) **i** nie wystarcza na full + konsumpcję do 15:00 → **tryb LOWPV**: ładuje do 100%.
 6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_wieczor` = ON → **ETAP 2**: doładowuje pod planowany eksport wieczorny (patrz niżej).
+   - Sloty eksportowe są rozpoznawane po kandydatach cenowych, a nie po aktualnie dostępnej nadwyżce baterii. Dzięki temu niski SOC o 13:00 nie daje fałszywego `NO_SLOTS`, tylko uruchamia doładowanie pod drogie sloty 15–22.
 
 Modyfikatory zużycia jak w oknie RANO.
 
@@ -406,6 +407,10 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-05-31
+- **EMS1: popołudniowe doładowanie pod eksport przy niskim SOC** (`packages/automations_magazyn.yaml`):
+  - `NO_SLOTS` w ETAPIE 2 oznacza teraz faktyczny brak drogich slotów RCE 15–22, a nie brak bieżącej nadwyżki energii w baterii.
+  - Jeśli drogie sloty istnieją, ale SOC jest jeszcze niski, plan używa idealnej energii slotów do wyliczenia brakującego doładowania z sieci w oknie 13–15.
+
 - **EMS1: naprawa podwójnego naliczania kosztów finansowych** (`packages/finanse_pv.yaml`):
   - Akumulacja finansów zeruje delty, gdy `var.finanse_prev_trigger_time` jest starszy niż 45 minut, zamiast naliczać w kółko ten sam stary przyrost licznika.
   - Zapis `finanse_prev_*` wykonywany jest od razu po policzeniu delt, żeby błąd w dalszych akumulatorach cyklu 6-6 nie powodował ponownego księgowania tego samego slotu.

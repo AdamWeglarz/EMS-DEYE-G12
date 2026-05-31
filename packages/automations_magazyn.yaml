@@ -2088,12 +2088,31 @@ automation:
               {% endif %}
             {% endfor %}
 
-            {% set export_plan_batt_sum = nsFull.batt_sum + nsPart.batt_sum %}
             {# Idealny plan (nieograniczony energią) — ile potrzeba gdyby wszystkie sloty były pełne #}
             {% set export_ideal_batt_sum = (full_sorted | length + partial_sorted | length) * battery_slot_u_full %}
             {% set export_required_total_u = E_required_partial_evening + export_ideal_batt_sum %}
             {% set export_plan_lines = nsFull.lines ~ nsPart.lines %}
-            {% set has_export_slots = (export_plan_batt_sum > 0.01) %}
+            {% set export_plan_batt_sum = nsFull.batt_sum + nsPart.batt_sum %}
+            {% set has_export_slots = (export_ideal_batt_sum > 0.01) %}
+            {% if has_export_slots and export_plan_batt_sum <= 0.01 %}
+              {% set export_plan_batt_sum = export_ideal_batt_sum %}
+              {% set nsIdeal = namespace(lines='') %}
+              {% for s in full_sorted %}
+                {% set nsIdeal.lines = nsIdeal.lines ~
+                  "\n- " ~ s.period ~
+                  " | FULL | " ~ (s.price_mwh | round(1)) ~ " PLN/MWh" ~
+                  " | bat:" ~ (s.batt_cap | round(3)) ~ " kWh | topup_needed"
+                %}
+              {% endfor %}
+              {% for s in partial_sorted %}
+                {% set nsIdeal.lines = nsIdeal.lines ~
+                  "\n- " ~ s.period ~
+                  " | PARTIAL | " ~ (s.price_mwh | round(1)) ~ " PLN/MWh" ~
+                  " | bat:" ~ (s.batt_cap | round(3)) ~ " kWh | topup_needed"
+                %}
+              {% endfor %}
+              {% set export_plan_lines = nsIdeal.lines %}
+            {% endif %}
 
             {% if not has_export_slots %}
               {% set export_reason = 'NO_SLOTS' %}
