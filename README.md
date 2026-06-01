@@ -406,6 +406,11 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-06-01
+- **EMS1: spójny cel LOWPV po południu** (`packages/automations_magazyn.yaml`):
+  - Tryb LOWPV po ustawieniu celu 100% przelicza teraz także `grid_add_u` na energię potrzebną do pełnego magazynu.
+  - Podsumowanie, cel kWh watchdoga i limit SOC falownika nie rozjeżdżają się już na układ `Cel finalny: 100%`, ale `Doładować finalnie: 63%`.
+
 ### 2026-05-31
 - **EMS1: popołudniowe doładowanie pod eksport przy niskim SOC** (`packages/automations_magazyn.yaml`):
   - `NO_SLOTS` w ETAPIE 2 oznacza teraz faktyczny brak drogich slotów RCE 15–22, a nie brak bieżącej nadwyżki energii w baterii.

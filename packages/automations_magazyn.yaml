@@ -1902,6 +1902,9 @@ automation:
           {# ===== LOWPV SMART ===== #}
           {% if pv_low and not blokada_spill and not urlop_any %}
             {% set cel = 100 %}
+            {% set grid_add_u = max_ene_u - E15_base %}
+            {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
+            {% if grid_add_u > max_ene_u %}{% set grid_add_u = max_ene_u %}{% endif %}
             {% set czy_ladowac = true %}
             {% set powod = 'LOWPV' %}
           {% endif %}
