@@ -125,6 +125,27 @@ sql:
     device_class: power
 
 template:
+  - sensor:
+      - name: "Srednie zuzycie godzinne bez urlopu bez sprzatania"
+        unique_id: "avg_usage_current_hour_normal"
+        unit_of_measurement: "kWh"
+        state: >
+          {{ states('sensor.srednie_zuzycie_o_obecnej_godzinie') | float(states('var.magazyn_konsumpcja_default_kwh_h') | float(1.5)) | round(3) }}
+
+      - name: "Srednie zuzycie godzinne z urlopem"
+        unique_id: "avg_usage_current_hour_vacation"
+        unit_of_measurement: "kWh"
+        state: >
+          {{ states('var.magazyn_konsumpcja_urlop_kwh_h') | float(0.5) | round(3) }}
+
+      - name: "Srednie zuzycie godzinne ze sprzataniem"
+        unique_id: "avg_usage_current_hour_cleaning"
+        unit_of_measurement: "kWh"
+        state: >
+          {% set normal = states('sensor.srednie_zuzycie_godzinne_bez_urlopu_bez_sprzatania') | float(states('var.magazyn_konsumpcja_default_kwh_h') | float(1.5)) %}
+          {% set mult = states('var.magazyn_konsumpcja_mult_sprzatanie') | float(2.0) %}
+          {{ (normal * mult) | round(3) }}
+
   - trigger:
       - platform: state
         entity_id: sensor.solaredge_ac_power

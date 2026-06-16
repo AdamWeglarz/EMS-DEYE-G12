@@ -141,6 +141,11 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 - `calendar.sprzatanie` aktywny → z_h = SQL × `var.magazyn_konsumpcja_mult_sprzatanie` (domyślnie ×2,0)
 - Brak kalendarza → z_h = SQL × `var.magazyn_konsumpcja_multiplier` (domyślnie ×1,15)
 
+**Statystyki pomocnicze zużycia godzinnego:**
+- `sensor.srednie_zuzycie_godzinne_bez_urlopu_bez_sprzatania` – średnia SQL dla bieżącej godziny bez modyfikatorów kalendarza
+- `sensor.srednie_zuzycie_godzinne_z_urlopem` – stała wartość `var.magazyn_konsumpcja_urlop_kwh_h`
+- `sensor.srednie_zuzycie_godzinne_ze_sprzataniem` – średnia normalna × `var.magazyn_konsumpcja_mult_sprzatanie`
+
 ---
 
 ## Planowanie ładowania – okno POŁUDNIE (13:00–15:00)
@@ -405,6 +410,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ---
 
 ## Historia zmian
+
+### 2026-06-16
+- Dodano trzy statystyki pomocnicze zużycia godzinnego: normalne bez kalendarzy, wariant urlopowy i wariant sprzątania.
 
 ### 2026-06-01
 - **EMS1: spójny cel LOWPV po południu** (`packages/automations_magazyn.yaml`):
