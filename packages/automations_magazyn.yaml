@@ -2666,3 +2666,211 @@ automation:
         message: >-
           Ustawiono min SOC rano = {{ states('var.magazyn_soc_min_rano_percent') | int }}%
           na podstawie pogody: {{ states('weather.pirateweather') }}
+
+- id: ems1_battery_cost_tracker_5min
+  alias: "EMS1: licz średni koszt energii w magazynie"
+  description: >
+    Co 5 minut aktualizuje średni koszt energii w magazynie na bazie liczników
+    Solarman safe. Logika zgodna z EMS2: ładowanie z PV wycenia po koszcie
+    alternatywnym RCE, ładowanie z grid po koszcie zakupu G12, a rozładowanie
+    schodzi po średnim koszcie.
+  mode: single
+  trigger:
+    - platform: time_pattern
+      minutes: "/5"
+    - platform: homeassistant
+      event: start
+  condition: []
+  action:
+    - variables:
+        charge_now: "{{ states('sensor.solarman_total_battery_charge_safe') | float(0) }}"
+        discharge_now: "{{ states('sensor.solarman_total_battery_discharge_safe') | float(0) }}"
+        pv_now: "{{ states('sensor.solarman_microinverter_energy_today_safe') | float(0) }}"
+        load_now: "{{ states('sensor.solarman_total_load_consumption_safe') | float(0) }}"
+        charge_prev: "{{ states('var.ems1_cost_tracker_battery_charge_snapshot_kwh') | float(0) }}"
+        discharge_prev: "{{ states('var.ems1_cost_tracker_battery_discharge_snapshot_kwh') | float(0) }}"
+        pv_prev: "{{ states('var.ems1_cost_tracker_pv_snapshot_kwh') | float(0) }}"
+        load_prev: "{{ states('var.ems1_cost_tracker_load_snapshot_kwh') | float(0) }}"
+        prev_time_str: "{{ states('var.ems1_battery_cost_tracker_last_update') }}"
+
+    - variables:
+        wynik: >-
+          {% set prev_missing = prev_time_str in ['unknown', 'unavailable', 'none', '', '2000-01-01 00:00:00'] %}
+          {% set prev_time = as_datetime(prev_time_str) if not prev_missing else now() %}
+          {% set age_h = ((as_timestamp(now()) - as_timestamp(prev_time)) / 3600) if not prev_missing else 0 %}
+          {% set age_min = age_h * 60 %}
+          {% set fresh = (not prev_missing) and age_min > 0 and age_min <= 45 %}
+
+          {% set pojemnosc = states('var.magazyn_pojemnosc_brutto_kwh') | float(15) %}
+          {% set soc = states('sensor.solarman_battery_safe') | float(0) %}
+          {% set floor_pct = states('var.magazyn_soc_floor_percent') | float(20) %}
+          {% set rt_eff_raw = states('var.magazyn_bateria_sprawnosc_roundtrip') | float(0.93) %}
+          {% set rt_eff = [[rt_eff_raw, 0.001] | max, 1.0] | min %}
+          {% set discharge_eff = rt_eff ** 0.5 %}
+          {% set fallback_avg = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) %}
+
+          {% set avg0 = states('var.ems1_battery_avg_cost_pln_kwh') | float(0) %}
+          {% set basis0 = states('var.ems1_battery_cost_basis_pln') | float(0) %}
+          {% set energy0 = states('var.ems1_battery_costed_energy_kwh') | float(0) %}
+          {% if basis0 <= 0 and avg0 > 0 and energy0 > 0 %}
+            {% set basis0 = avg0 * energy0 %}
+          {% endif %}
+
+          {% set seed = namespace(done=false, avg=avg0, basis=basis0, energy=energy0) %}
+          {% if seed.avg <= 0 or seed.energy <= 0 %}
+            {% set usable_soc_pct = [soc - floor_pct, 0] | max %}
+            {% set deliverable = pojemnosc * usable_soc_pct / 100 * discharge_eff %}
+            {% if fallback_avg > 0 and deliverable > 0.05 %}
+              {% set seed.avg = fallback_avg %}
+              {% set seed.energy = deliverable %}
+              {% set seed.basis = fallback_avg * deliverable %}
+              {% set seed.done = true %}
+            {% endif %}
+          {% endif %}
+
+          {% set cd_raw = charge_now | float(0) - charge_prev | float(0) %}
+          {% set dd_raw = discharge_now | float(0) - discharge_prev | float(0) %}
+          {% set ld_raw = load_now | float(0) - load_prev | float(0) %}
+          {% if pv_now | float(0) >= pv_prev | float(0) %}
+            {% set pd_raw = pv_now | float(0) - pv_prev | float(0) %}
+          {% else %}
+            {% set pd_raw = pv_now | float(0) %}
+          {% endif %}
+
+          {% set charge_delta = cd_raw if fresh and cd_raw >= 0 and cd_raw < 5 else 0 %}
+          {% set discharge_delta = dd_raw if fresh and dd_raw >= 0 and dd_raw < 5 else 0 %}
+          {% set load_delta = ld_raw if fresh and ld_raw >= 0 and ld_raw < 8 else 0 %}
+          {% set pv_delta = pd_raw if fresh and pd_raw >= 0 and pd_raw < 8 else 0 %}
+
+          {% set pv_surplus = [pv_delta - load_delta, 0] | max %}
+          {% set pv_charge = [charge_delta, pv_surplus] | min %}
+          {% set grid_charge = [charge_delta - pv_charge, 0] | max %}
+
+          {% set prev_ts = as_local(prev_time) %}
+          {% set h = prev_ts.hour %}
+          {% if (h >= 13 and h < 15) or h >= 22 or h < 6 %}
+            {% set buy_price = states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0.65) %}
+          {% else %}
+            {% set buy_price = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(1.03) %}
+          {% endif %}
+
+          {% set ceny = state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
+          {% set slot_end_min = (((prev_ts.hour * 60 + prev_ts.minute) // 15) + 1) * 15 %}
+          {% set slot_h = (slot_end_min // 60) % 24 %}
+          {% set slot_m = slot_end_min % 60 %}
+          {% set rce = namespace(v=0.0, found=false) %}
+          {% for c in ceny %}
+            {% set dt = as_local(as_datetime(c.dtime)) if c.dtime is defined else none %}
+            {% if dt is not none and dt.hour == slot_h and dt.minute == slot_m and not rce.found %}
+              {% set rce.v = (c.rce_pln | float(0)) / 1000 %}
+              {% set rce.found = true %}
+            {% endif %}
+          {% endfor %}
+          {% set sell_price = [rce.v, 0] | max %}
+
+          {% set basis = [seed.basis, 0] | max %}
+          {% set energy = [seed.energy, 0] | max %}
+          {% set added_cost = (pv_charge * sell_price) + (grid_charge * buy_price) %}
+          {% set added_deliverable = (pv_charge + grid_charge) * rt_eff %}
+          {% set basis_after_charge = basis + added_cost %}
+          {% set energy_after_charge = energy + added_deliverable %}
+          {% set avg_before_discharge = (basis_after_charge / energy_after_charge) if energy_after_charge > 0.000001 else [seed.avg, 0] | max %}
+          {% set removed = [discharge_delta, energy_after_charge] | min %}
+          {% set basis_after_discharge = [basis_after_charge - removed * avg_before_discharge, 0] | max %}
+          {% set energy_after_discharge = [energy_after_charge - removed, 0] | max %}
+
+          {% if energy_after_discharge <= 0.05 %}
+            {% set avg = 0 %}
+            {% set basis_final = 0 %}
+            {% set energy_final = 0 %}
+          {% else %}
+            {% set avg = basis_after_discharge / energy_after_discharge %}
+            {% set basis_final = basis_after_discharge %}
+            {% set energy_final = energy_after_discharge %}
+          {% endif %}
+
+          {% if pv_charge > 0.000001 and grid_charge > 0.000001 %}
+            {% set source = 'mixed_charge' %}
+          {% elif pv_charge > 0.000001 %}
+            {% set source = 'pv_charge' %}
+          {% elif grid_charge > 0.000001 %}
+            {% set source = 'grid_charge' %}
+          {% elif discharge_delta > 0.000001 %}
+            {% set source = 'discharge' %}
+          {% elif seed.done %}
+            {% set source = 'seed' %}
+          {% else %}
+            {% set source = 'idle' %}
+          {% endif %}
+
+          {% set warnings = namespace(items=[]) %}
+          {% if prev_missing %}{% set warnings.items = warnings.items + ['init_snapshot'] %}{% endif %}
+          {% if not rce.found %}{% set warnings.items = warnings.items + ['missing_rce_price'] %}{% endif %}
+          {% if fresh and discharge_delta > seed.energy + added_deliverable + 0.05 %}
+            {% set warnings.items = warnings.items + ['discharge_exceeded_costed_energy'] %}
+          {% endif %}
+
+          {{ avg | round(6) }}###{{ basis_final | round(6) }}###{{ energy_final | round(6) }}###{{ source }}###{{ warnings.items | join(',') }}###{{ charge_delta | round(6) }}###{{ pv_charge | round(6) }}###{{ grid_charge | round(6) }}###{{ discharge_delta | round(6) }}###{{ buy_price | round(6) }}###{{ sell_price | round(6) }}###{{ added_cost | round(6) }}###{{ (removed * avg_before_discharge) | round(6) }}###{{ age_min | round(2) }}
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_battery_avg_cost_pln_kwh
+        value: "{{ wynik.split('###')[0] | float(0) }}"
+        attributes:
+          source: "{{ wynik.split('###')[3] }}"
+          warnings: "{{ wynik.split('###')[4] }}"
+          charge_delta_kwh: "{{ wynik.split('###')[5] | float(0) }}"
+          pv_charge_kwh: "{{ wynik.split('###')[6] | float(0) }}"
+          grid_charge_kwh: "{{ wynik.split('###')[7] | float(0) }}"
+          discharge_kwh: "{{ wynik.split('###')[8] | float(0) }}"
+          buy_price_pln_kwh: "{{ wynik.split('###')[9] | float(0) }}"
+          sell_price_pln_kwh: "{{ wynik.split('###')[10] | float(0) }}"
+          added_cost_pln: "{{ wynik.split('###')[11] | float(0) }}"
+          removed_cost_pln: "{{ wynik.split('###')[12] | float(0) }}"
+          age_min: "{{ wynik.split('###')[13] | float(0) }}"
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_battery_cost_basis_pln
+        value: "{{ wynik.split('###')[1] | float(0) }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_battery_costed_energy_kwh
+        value: "{{ wynik.split('###')[2] | float(0) }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_battery_cost_tracker_last_update
+        value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_battery_cost_tracker_source
+        value: "{{ wynik.split('###')[3] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_battery_cost_tracker_warnings
+        value: "{{ wynik.split('###')[4] }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_cost_tracker_battery_charge_snapshot_kwh
+        value: "{{ charge_now | float(0) }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_cost_tracker_battery_discharge_snapshot_kwh
+        value: "{{ discharge_now | float(0) }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_cost_tracker_pv_snapshot_kwh
+        value: "{{ pv_now | float(0) }}"
+
+    - service: var.set
+      data:
+        entity_id: var.ems1_cost_tracker_load_snapshot_kwh
+        value: "{{ load_now | float(0) }}"

@@ -500,3 +500,81 @@ var:
     unit_of_measurement: "kWh"
     initial_value: 0
     restore: true
+
+  # --- EMS1 sredni koszt energii w magazynie ---
+  ems1_battery_avg_cost_pln_kwh:
+    unique_id: "ems1_battery_avg_cost_pln_kwh"
+    friendly_name: "EMS1: średni koszt energii w magazynie"
+    icon: mdi:battery-sync
+    unit_of_measurement: "PLN/kWh"
+    initial_value: 0
+    restore: true
+
+  ems1_battery_cost_basis_pln:
+    unique_id: "ems1_battery_cost_basis_pln"
+    friendly_name: "EMS1: baza kosztowa energii w magazynie"
+    icon: mdi:cash-multiple
+    unit_of_measurement: "PLN"
+    initial_value: 0
+    restore: true
+
+  ems1_battery_costed_energy_kwh:
+    unique_id: "ems1_battery_costed_energy_kwh"
+    friendly_name: "EMS1: energia magazynu objęta kosztem"
+    icon: mdi:battery-clock
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  ems1_battery_cost_tracker_last_update:
+    unique_id: "ems1_battery_cost_tracker_last_update"
+    friendly_name: "EMS1: ostatnia aktualizacja kosztu magazynu"
+    icon: mdi:clock-sync-outline
+    initial_value: ""
+    restore: true
+
+  ems1_battery_cost_tracker_source:
+    unique_id: "ems1_battery_cost_tracker_source"
+    friendly_name: "EMS1: źródło zmiany kosztu magazynu"
+    icon: mdi:source-branch
+    initial_value: "idle"
+    restore: true
+
+  ems1_battery_cost_tracker_warnings:
+    unique_id: "ems1_battery_cost_tracker_warnings"
+    friendly_name: "EMS1: ostrzeżenia trackera kosztu magazynu"
+    icon: mdi:alert-outline
+    initial_value: ""
+    restore: false
+
+  ems1_cost_tracker_battery_charge_snapshot_kwh:
+    unique_id: "ems1_cost_tracker_battery_charge_snapshot_kwh"
+    friendly_name: "EMS1: snapshot licznika ładowania baterii dla kosztu"
+    icon: mdi:battery-plus
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  ems1_cost_tracker_battery_discharge_snapshot_kwh:
+    unique_id: "ems1_cost_tracker_battery_discharge_snapshot_kwh"
+    friendly_name: "EMS1: snapshot licznika rozładowania baterii dla kosztu"
+    icon: mdi:battery-minus
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  ems1_cost_tracker_pv_snapshot_kwh:
+    unique_id: "ems1_cost_tracker_pv_snapshot_kwh"
+    friendly_name: "EMS1: snapshot produkcji PV dla kosztu"
+    icon: mdi:solar-power
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true
+
+  ems1_cost_tracker_load_snapshot_kwh:
+    unique_id: "ems1_cost_tracker_load_snapshot_kwh"
+    friendly_name: "EMS1: snapshot zużycia domu dla kosztu"
+    icon: mdi:home-lightning-bolt
+    unit_of_measurement: "kWh"
+    initial_value: 0
+    restore: true

@@ -347,6 +347,9 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 | `magazyn_freeze_time` | 22:00 | Godzina blokady rozładowania (nocna) |
 | `magazyn_koszt_calkowity_strefa_drozsza_pln_kwh` | 1,03 PLN/kWh | Pełny koszt energii – strefa droższa (G2) |
 | `magazyn_koszt_calkowity_strefa_tansza_pln_kwh` | 0,65 PLN/kWh | Pełny koszt energii – strefa tańsza (G1) |
+| `ems1_battery_avg_cost_pln_kwh` | dynamiczne | Średni koszt energii w magazynie EMS1: PV po koszcie alternatywnym RCE, grid po G12 |
+| `ems1_battery_cost_basis_pln` | dynamiczne | Baza kosztowa energii objętej trackingiem EMS1 |
+| `ems1_battery_costed_energy_kwh` | dynamiczne | Energia magazynu objęta średnim kosztem EMS1 |
 
 ---
 
@@ -413,6 +416,10 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ### 2026-06-16
 - Dodano trzy statystyki pomocnicze zużycia godzinnego: normalne bez kalendarzy, wariant urlopowy i wariant sprzątania.
+- **EMS1: średni koszt energii w magazynie** (`packages/automations_magazyn.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
+  - Nowy tracker `ems1_battery_cost_tracker_5min` aktualizuje średni koszt co 5 minut na licznikach Solarman safe.
+  - Mechanizm jest przeniesiony z EMS2: ładowanie z PV liczone po koszcie alternatywnym RCE, ładowanie z grid po G12, rozładowanie zdejmuje koszt po średniej.
+  - Na tym etapie tracker tylko liczy koszt i diagnostykę; decyzje eksportowe EMS1 nie używają go jeszcze do wyboru godzin.
 
 ### 2026-06-01
 - **EMS1: spójny cel LOWPV po południu** (`packages/automations_magazyn.yaml`):
