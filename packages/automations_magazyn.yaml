@@ -1420,6 +1420,14 @@ automation:
             {% if cel_final > 100 %}{% set cel_final = 100 %}{% endif %}
           {% endif %}
 
+          {# Nocna blokada rozładowania używa charge_from_grid jako hold-SOC.
+             Nie wolno obniżać celu poniżej bieżącego SOC przed 06:00, bo Deye
+             pozwoli wtedy domowi zużyć energię ponad nowy target. #}
+          {% if czy_ladowac_final and cel_final < soc_akt %}
+            {% set cel_final = soc_akt | round(0) | int %}
+          {% endif %}
+          {% if cel_final > 100 %}{% set cel_final = 100 %}{% endif %}
+
           {% set ns.raport = ns.raport ~
             "\nTARGET13 | target_soc:" ~ target_soc_13|round(0) ~
             "% | target_u:" ~ target_u_13|round(2) ~ "kWh" ~
@@ -1536,7 +1544,7 @@ automation:
   mode: single
   trigger:
     - platform: time
-      at: "05:59:00"
+      at: "06:00:00"
   condition: []
   action:
     - alias: "Wyłącz ładowanie z sieci"
