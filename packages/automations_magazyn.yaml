@@ -59,7 +59,7 @@ automation:
       {% if desired_mode == 'pv_export' %}
         0
       {% else %}
-        120
+        150
       {% endif %}
 
     target_battery_max_charging_current: 150
@@ -88,13 +88,13 @@ automation:
                 - conditions:
                     - condition: template
                       value_template: >
-                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 150 }}
                   sequence:
                     - action: number.set_value
                       target:
                         entity_id: number.solarman_battery_max_discharging_current
                       data:
-                        value: 120
+                        value: 150
                     - delay: "{{ delay_after_change }}"
 
             - repeat:
@@ -525,18 +525,18 @@ automation:
                       value: 20
                   - delay: "{{ delay_after_change }}"
 
-    # max discharging current -> 120
+    # max discharging current -> 150
     - choose:
         - conditions:
             - condition: template
               value_template: >
-                {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+                {{ states('number.solarman_battery_max_discharging_current') | float(999) != 150 }}
           sequence:
             - action: number.set_value
               target:
                 entity_id: number.solarman_battery_max_discharging_current
               data:
-                value: 120
+                value: 150
             - delay: "{{ delay_after_change }}"
 
     # work mode -> Zero Export To CT
@@ -650,18 +650,18 @@ automation:
                         option: "Zero Export To CT"
                     - delay: "{{ delay_after_change }}"
 
-            # max discharging current -> 120
+            # max discharging current -> 150
             - choose:
                 - conditions:
                     - condition: template
                       value_template: >
-                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 150 }}
                   sequence:
                     - action: number.set_value
                       target:
                         entity_id: number.solarman_battery_max_discharging_current
                       data:
-                        value: 120
+                        value: 150
                     - delay: "{{ delay_after_change }}"
 
             # max charging current -> 150
@@ -896,18 +896,18 @@ automation:
                         option: "Export First"
                     - delay: "{{ delay_after_change }}"
 
-            # max discharging current -> 120
+            # max discharging current -> 150
             - choose:
                 - conditions:
                     - condition: template
                       value_template: >
-                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 120 }}
+                        {{ states('number.solarman_battery_max_discharging_current') | float(999) != 150 }}
                   sequence:
                     - action: number.set_value
                       target:
                         entity_id: number.solarman_battery_max_discharging_current
                       data:
-                        value: 120
+                        value: 150
                     - delay: "{{ delay_after_change }}"
 
             # wszystkie programy charging -> Disabled, SOC -> 20
