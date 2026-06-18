@@ -62,6 +62,9 @@ automation:
         120
       {% endif %}
 
+    target_battery_max_charging_current: 150
+    target_battery_grid_charging_current: 150
+
     target_work_mode: >
       {% if desired_mode in ['pv_export', 'bat_export'] %}
         Export First
@@ -274,6 +277,34 @@ automation:
                 entity_id: number.solarman_battery_max_discharging_current
               data:
                 value: "{{ target_battery_max_discharging_current | int }}"
+            - delay: "{{ delay_after_change }}"
+
+    # max charging current
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ states('number.solarman_battery_max_charging_current') | float(999) != (target_battery_max_charging_current | float(999)) }}
+          sequence:
+            - action: number.set_value
+              target:
+                entity_id: number.solarman_battery_max_charging_current
+              data:
+                value: "{{ target_battery_max_charging_current | int }}"
+            - delay: "{{ delay_after_change }}"
+
+    # grid charging current
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ states('number.solarman_battery_grid_charging_current') | float(999) != (target_battery_grid_charging_current | float(999)) }}
+          sequence:
+            - action: number.set_value
+              target:
+                entity_id: number.solarman_battery_grid_charging_current
+              data:
+                value: "{{ target_battery_grid_charging_current | int }}"
             - delay: "{{ delay_after_change }}"
 
     # work mode
@@ -631,6 +662,34 @@ automation:
                         entity_id: number.solarman_battery_max_discharging_current
                       data:
                         value: 120
+                    - delay: "{{ delay_after_change }}"
+
+            # max charging current -> 150
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('number.solarman_battery_max_charging_current') | float(999) != 150 }}
+                  sequence:
+                    - action: number.set_value
+                      target:
+                        entity_id: number.solarman_battery_max_charging_current
+                      data:
+                        value: 150
+                    - delay: "{{ delay_after_change }}"
+
+            # grid charging current -> 150
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >
+                        {{ states('number.solarman_battery_grid_charging_current') | float(999) != 150 }}
+                  sequence:
+                    - action: number.set_value
+                      target:
+                        entity_id: number.solarman_battery_grid_charging_current
+                      data:
+                        value: 150
                     - delay: "{{ delay_after_change }}"
 
             # wszystkie programy charging -> Grid, SOC -> manual_limit

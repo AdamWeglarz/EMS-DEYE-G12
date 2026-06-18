@@ -112,11 +112,11 @@ System operuje na 3 trybach sterowanych przez `input_boolean`:
 
 | Flaga | Tryb falownika | Zastosowanie |
 |---|---|---|
-| `battery_charge_from_grid` | Grid Charging (wszystkie 6 programów = Grid, docelowy SOC) | Nocne ładowanie z sieci |
+| `battery_charge_from_grid` | Grid Charging (wszystkie 6 programów = Grid, docelowy SOC, prąd ładowania = 150A) | Nocne ładowanie z sieci |
 | `pv_discharge_to_grid` | Export First, prąd rozładowania = 0 | Oddawanie nadwyżki PV (bez baterii) |
 | `battery_discharge_to_grid` | Export First, prąd rozładowania = 120A | Oddawanie energii z baterii do sieci |
 
-Zmiana dowolnej flagi wyzwala automatyzację `pv_battery_grid_modes_profile_sync_v2`, która synchronizuje parametry Solarmana (tryb pracy, 6 programów, SOC, prąd rozładowania) z minimalną liczbą wywołań API.
+Zmiana dowolnej flagi wyzwala automatyzację `pv_battery_grid_modes_profile_sync_v2`, która synchronizuje parametry Solarmana (tryb pracy, 6 programów, SOC, prąd ładowania/rozładowania) z minimalną liczbą wywołań API.
 
 Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"Ładuje z Grid"_, _"Oddaje nadwyżkę PV"_, _"Normalna praca"_).
 
@@ -413,6 +413,12 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ---
 
 ## Historia zmian
+
+### 2026-06-18
+- **Prąd ładowania magazynu 150A** (`packages/automations_magazyn.yaml`):
+  - profil `battery_charge_from_grid` ustawia `number.solarman_battery_max_charging_current` na 150A
+  - ładowanie z sieci ustawia `number.solarman_battery_grid_charging_current` na 150A
+  - ścieżka naprawcza dla stanu "Start ładowania z Grid (konfiguracja w toku)" wymusza te same limity
 
 ### 2026-06-16
 - Dodano trzy statystyki pomocnicze zużycia godzinnego: normalne bez kalendarzy, wariant urlopowy i wariant sprzątania.
