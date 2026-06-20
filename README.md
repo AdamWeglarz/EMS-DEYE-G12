@@ -414,6 +414,11 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-06-20
+- **EMS1: eksport wieczorny PARTIAL netto** (`packages/magazyn_nowyeksport.yaml`):
+  - Planowana energia baterii w slocie nadal steruje rozładowaniem.
+  - `Szac. eksport` dla slotow PARTIAL liczy teraz eksport netto jako `BAT + prognoza PV - plan domu`, tak jak tryb FULL.
+
 ### 2026-06-18
 - **Prąd ładowania i rozładowania magazynu 150A** (`packages/automations_magazyn.yaml`):
   - profil `battery_charge_from_grid` ustawia `number.solarman_battery_max_charging_current` na 150A

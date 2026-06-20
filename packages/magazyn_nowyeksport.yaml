@@ -1395,7 +1395,7 @@ automation:
       - eksport działa tylko, gdy aktualny slot jest w planie
       - brak danych PV NIE blokuje wykonania eksportu
       - FIX: PV bierze detailedForecast (30-min sloty)
-      - FIX: PARTIAL nie odejmuje zużycia domu drugi raz
+      - FIX: PARTIAL liczy eksport netto jako BAT + PV - dom
   
     trigger:
       - platform: time
@@ -1830,7 +1830,7 @@ automation:
               {% set sellable_partial_after_full = sellable_partial_baseline %}
             {% endif %}
   
-            {# --- wybór PARTIAL: batt_use to już energia sprzedażowa --- #}
+            {# --- wybór PARTIAL: batt_use steruje rozładowaniem, export_energy to eksport netto BAT + PV - dom --- #}
             {% set nsPart = namespace(rem=sellable_partial_after_full, chosen=[], batt_sum=0.0, export_sum=0.0, lines='') %}
             {% for s in partial_sorted %}
               {% if nsPart.rem > 0.001 %}
@@ -1838,7 +1838,10 @@ automation:
                 {% if batt_use < 0 %}
                   {% set batt_use = 0 %}
                 {% endif %}
-                {% set export_energy = batt_use %}
+                {% set export_energy = s.base_delta + batt_use %}
+                {% if export_energy < 0 %}
+                  {% set export_energy = 0 %}
+                {% endif %}
                 {% if batt_use > 0 or export_energy > 0 %}
                   {% set nsPart.chosen = nsPart.chosen + [{
                     'period': s.period,
