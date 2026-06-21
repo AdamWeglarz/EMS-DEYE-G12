@@ -329,6 +329,13 @@ var:
     initial_value: 20
     restore: true
 
+  magazyn_plan_export_po_22:
+    unique_id: magazyn_plan_export_po_22
+    friendly_name: "Magazyn: plan eksportu po 22"
+    icon: "mdi:clock-plus-outline"
+    initial_value: 0
+    restore: true
+
   min_soc_dynamic_13:
     unique_id: min_soc_dynamic_13
     friendly_name: "Magazyn: minimalny dynamiczny SOC do 13:00"

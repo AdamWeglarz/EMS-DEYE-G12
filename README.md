@@ -98,7 +98,7 @@ packages/
 ├── solarmansafe.yaml             # Sensory "safe" – stabilizacja odczytów falownika + statistics + min_max
 ├── sensors_sql_pv.yaml           # SQL: średnie zużycie godzinowe/30-min + energia oddana (slot 15min, 6-13, 15-22)
 ├── automations_magazyn.yaml      # Główne automatyzacje: RANO (03-06) i POŁUDNIE (13-15)
-├── magazyn_nowyeksport.yaml      # Eksport: oddawanie poranne (06-13), wieczorne (15-22), blokada 22
+├── magazyn_nowyeksport.yaml      # Eksport: oddawanie poranne (06-13), wieczorne (15-22/23), blokada 22/23
 ├── magazynlimity.yaml            # Bilans eksportu, przeniesiona energia, sensory pomocnicze
 ├── finanse_pv.yaml               # Śledzenie oszczędności i przychodów ze sprzedaży
 └── ems_agd.yaml                  # Scheduler AGD: optymalny start pralki i suszarki
@@ -155,13 +155,14 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 **Cel:** opcjonalne doładowanie baterii z sieci (taryfa tańsza 13–15), aby przygotować się na wieczorne oddawanie lub zapewnić energię na noc.
 
 **Algorytm:**
-1. Pobiera z SQL średnie zużycie dla slotów 30-min (sloty 26–43, tj. 13:00–22:00) z ostatnich 7 dni.
-2. Pobiera prognozę PV 13–22 (`detailedForecast`, sloty 30-min; odejmuje już wyprodukowaną energię).
-3. Symuluje SOC slot po slocie do 22:00.
+1. Pobiera z SQL średnie zużycie dla slotów 30-min (sloty 26–45, tj. 13:00–23:00) z ostatnich 7 dni.
+2. Pobiera prognozę PV 13–22/23 (`detailedForecast`, sloty 30-min; odejmuje już wyprodukowaną energię).
+3. Symuluje SOC slot po slocie do 22:00, a przy aktywnym planie eksportu po 22 do 23:00.
 4. Wyznacza limit doładowania potrzebny do pokrycia zużycia wieczornego z zapasem.
 5. Jeśli prognoza skoryg. < `var.magazyn_lowpv_threshold_popoludnie_kwh` (domyślnie 8 kWh) **i** nie wystarcza na full + konsumpcję do 15:00 → **tryb LOWPV**: ładuje do 100%.
 6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_wieczor` = ON → **ETAP 2**: doładowuje pod planowany eksport wieczorny (patrz niżej).
    - Sloty eksportowe są rozpoznawane po kandydatach cenowych, a nie po aktualnie dostępnej nadwyżce baterii. Dzięki temu niski SOC o 13:00 nie daje fałszywego `NO_SLOTS`, tylko uruchamia doładowanie pod drogie sloty 15–22.
+   - Jeśli slot 22:00–23:00 spełnia próg ceny, zapisywana jest flaga `var.magazyn_plan_export_po_22`, plan ładowania chroni energię domu do 23:00, a nocna blokada przesuwa się z 22:00 na 23:00.
 
 Modyfikatory zużycia jak w oknie RANO.
 
@@ -413,6 +414,13 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ---
 
 ## Historia zmian
+
+### 2026-06-21
+- **EMS1: warunkowy eksport wieczorny po 22:00** (`packages/automations_magazyn.yaml`, `packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
+  - Plan 13-15 wykrywa opłacalny slot 22:00-23:00 i zapisuje `var.magazyn_plan_export_po_22`.
+  - Eksport wieczorny działa do 23:00 tylko przy aktywnej fladze; bez flagi zachowanie zostaje 15:00-22:00.
+  - Blokada nocna o 22:00 pomija booking tylko przy aktywnym eksporcie po 22 i wykonuje go wtedy o 23:00; bez flagi 23:00 nic nie robi.
+  - Domykacz HH:45 pozostaje ograniczony do godzin 15-21, bo po 22 obowiązuje tania taryfa.
 
 ### 2026-06-20
 - **EMS1: eksport wieczorny PARTIAL netto** (`packages/magazyn_nowyeksport.yaml`):

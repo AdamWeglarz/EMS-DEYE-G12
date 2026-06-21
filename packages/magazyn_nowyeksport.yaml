@@ -1375,21 +1375,21 @@ automation:
 
 
 ###############################################################################
-# EKSPORT WIECZORNY DO SIECI (15:00–22:00)
-# PLAN + EXEC v5.2
+# EKSPORT WIECZORNY DO SIECI (15:00–22:00 / warunkowo do 23:00)
+# PLAN + EXEC v5.3
 # - FULL przed PARTIAL
 # - FIX PV parsing/fallback
 # - FIX PARTIAL: batt_use to już energia sprzedażowa po zabezpieczeniu domu
 ###############################################################################
   
-  - alias: "Magazyn: Eksport wieczorny (15-22) plan+exec v5.2"
+  - alias: "Magazyn: Eksport wieczorny (15-22/23) plan+exec v5.3"
     id: magazyn_export_wieczor_plan_exec_v5_2_full_first_fix_pv_fix_partial
     mode: single
     description: >
-      Wieczorny eksport 15:00–22:00:
+      Wieczorny eksport 15:00–22:00, warunkowo do 23:00:
       - FULL: cena >= prog_pelny -> oddaj maksymalnie do floor technicznego
       - PARTIAL: prog_czesciowy <= cena < prog_pelny -> oddaj tylko tyle,
-        by dowieźć dom do 22:00 i zostawić komfort
+        by dowieźć dom do końca sesji i zostawić komfort
       - FULL ma priorytet także budżetowo: PARTIAL dostaje tylko resztę po FULL
       - plan wybiera najlepsze sloty wg ceny
       - eksport działa tylko, gdy aktualny slot jest w planie
@@ -1454,6 +1454,14 @@ automation:
         at: "21:30:00"
       - platform: time
         at: "21:45:00"
+      - platform: time
+        at: "22:00:00"
+      - platform: time
+        at: "22:15:00"
+      - platform: time
+        at: "22:30:00"
+      - platform: time
+        at: "22:45:00"
   
     action:
       - variables:
@@ -1463,6 +1471,12 @@ automation:
           m_now: "{{ now().minute }}"
           t_now: "{{ now().strftime('%H:%M') }}"
           was_discharging: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
+          export_po22_active: >
+            {{ (states('var.magazyn_plan_export_po_22') | int(0)) == 1
+               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] }}
+          export_end_hour: >
+            {{ 23 if ((states('var.magazyn_plan_export_po_22') | int(0)) == 1
+               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON']) else 22 }}
   
           # Koszty / progi
           koszt_drozsza: "{{ states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) }}"
@@ -1506,7 +1520,7 @@ automation:
               AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - {{ lookback_sec }})
               AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) * 2
                    + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}')) / 30))
-                   BETWEEN {{ h_now * 2 + (m_now // 30) }} AND 43
+                   BETWEEN {{ h_now * 2 + (m_now // 30) }} AND {{ 45 if ((states('var.magazyn_plan_export_po_22') | int(0)) == 1 or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON']) else 43 }}
             GROUP BY slot
             ORDER BY slot;
         response_variable: statystyki_wieczor
@@ -1533,6 +1547,8 @@ automation:
             {% set slot_start_total = (h_now * 60 + slot_start_min) %}
             {% set dzis = now().date() %}
             {% set plan_date = dzis %}
+            {% set export_end_h = export_end_hour | int(22) %}
+            {% set export_end_slot_excl = export_end_h * 2 %}
 
             {# ===== URLOP: lista slotów (YYYY-MM-DD HH:MM) dla dzisiejszego planu ===== #}
             {% set urlop_list = (urlop_events['calendar.urlop'].events if (urlop_events and 'calendar.urlop' in urlop_events) else []) %}
@@ -1602,7 +1618,7 @@ automation:
             {% endfor %}
             {% set dict_z = nsC.d %}
   
-            {# --- PV dict 15-22: słownik slot→kWh (sloty 30-min, klucze 30..43) --- #}
+            {# --- PV dict 15-end: słownik slot→kWh (sloty 30-min) --- #}
             {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_dzisiaj', 'detailedForecast') or [] %}
 
             {% set nsP = namespace(d={}) %}
@@ -1614,7 +1630,7 @@ automation:
                     {% set ts_date = ps[0:10] %}
                     {% set ts_hour = ps[11:13] | int(-1) %}
                     {% set ts_min = ps[14:16] | int(0) %}
-                    {% if ts_date == (dzis | string) and ts_hour >= 15 and ts_hour < 22 %}
+                    {% if ts_date == (dzis | string) and ts_hour >= 15 and ts_hour < export_end_h %}
                       {% set s_it = ts_hour * 2 + (ts_min // 30) %}
                       {% set pv_value = item.get('pv_estimate', item.get('pv_forecast', 0)) | float(0) / 2 %}
                       {% set nsP.d = nsP.d | combine({ s_it: pv_value }) %}
@@ -1657,9 +1673,9 @@ automation:
             {% set s_now = h_now * 2 + (m_now // 30) %}
             {% set current_slot_factor = ((1800 - (m_now % 30 * 60 + now().second)) / 1800) | float(0) %}
 
-            {# --- zapotrzebowanie domu od teraz do 22:00 --- #}
+            {# --- zapotrzebowanie domu od teraz do końca sesji --- #}
             {% set ns_cons = namespace(total=0.0) %}
-            {% for s in range(s_now, 44) %}
+            {% for s in range(s_now, export_end_slot_excl) %}
               {% set hk = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(s // 2, (s % 2) * 30) %}
               {% set is_urlop_h = hk in urlop_hours %}
               {% set is_sprzatanie_h = hk in sprzatanie_hours %}
@@ -1670,26 +1686,26 @@ automation:
             {% set calkowite_zuzycie_kwh = ns_cons.total %}
 
             {% set ns_pv_sum = namespace(total=0.0) %}
-            {% for s in range(s_now, 44) %}
+            {% for s in range(s_now, export_end_slot_excl) %}
               {% set pv_h = pv_d.get(s, 0) %}
               {% set factor = current_slot_factor if s == s_now else 1 %}
               {% set ns_pv_sum.total = ns_pv_sum.total + (pv_h * factor) %}
             {% endfor %}
             {% set calkowite_pv_kwh = ns_pv_sum.total %}
   
-            {% set energia_dom_z_baterii_do_22 = calkowite_zuzycie_kwh - calkowite_pv_kwh %}
-            {% if energia_dom_z_baterii_do_22 < 0 %}
-              {% set energia_dom_z_baterii_do_22 = 0 %}
+            {% set energia_dom_z_baterii_do_end = calkowite_zuzycie_kwh - calkowite_pv_kwh %}
+            {% if energia_dom_z_baterii_do_end < 0 %}
+              {% set energia_dom_z_baterii_do_end = 0 %}
             {% endif %}
   
             {# --- partial baseline: realnie dostępny budżet (informacyjnie) --- #}
-            {% set E_required_partial = energia_dom_z_baterii_do_22 + E_reserve_u %}
+            {% set E_required_partial = energia_dom_z_baterii_do_end + E_reserve_u %}
             {% set sellable_partial_baseline = E0_u - E_required_partial %}
             {% if sellable_partial_baseline < 0 %}
               {% set sellable_partial_baseline = 0 %}
             {% endif %}
 
-            {# --- full: można zejść do floor, bez patrzenia na przetrwanie do 22:00 --- #}
+            {# --- full: można zejść do floor, bez patrzenia na przetrwanie do końca sesji --- #}
             {% set sellable_full_now = E0_u %}
             {% if sellable_full_now < 0 %}
               {% set sellable_full_now = 0 %}
@@ -1742,7 +1758,7 @@ automation:
                     {% set m = hm[1] | int %}
                     {% set st = h * 60 + m %}
                     {% set price_kwh = (c.rce_pln | float(0)) / 1000 %}
-                    {% if h >= 15 and h < 22 and st >= slot_start_total and price_kwh >= prog_czesciowy %}
+                    {% if h >= 15 and h < export_end_h and st >= slot_start_total and price_kwh >= prog_czesciowy %}
                       {% set pv_h = pv_d.get(h*2, 0) + pv_d.get(h*2+1, 0) %}
                       {% set hk0 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:00'|format(h) %}
                       {% set hk1 = plan_date.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:30'|format(h) %}
@@ -1780,7 +1796,7 @@ automation:
             {% set full_sorted = ns.full | sort(attribute='price_kwh', reverse=true) %}
             {% set partial_sorted = ns.partial | sort(attribute='price_kwh', reverse=true) %}
   
-            {# --- wybór FULL: maksymalnie do floor, bez patrzenia na 22:00 --- #}
+            {# --- wybór FULL: maksymalnie do floor, bez patrzenia na koniec sesji --- #}
             {% set nsFull = namespace(rem=sellable_full_now, chosen=[], batt_sum=0.0, export_sum=0.0, lines='') %}
             {% for s in full_sorted %}
               {% if nsFull.rem > 0.001 %}
@@ -1895,17 +1911,17 @@ automation:
             {% set should_partial_now = cena_kwh >= prog_czesciowy %}
             {% set should_full_now = cena_kwh >= prog_pelny %}
 
-            {% set E_after_plan_22 = E0_u - nsFull.batt_sum - nsPart.batt_sum - energia_dom_z_baterii_do_22 %}
-            {% if E_after_plan_22 < 0 %}
-              {% set E_after_plan_22 = 0 %}
+            {% set E_after_plan_end = E0_u - nsFull.batt_sum - nsPart.batt_sum - energia_dom_z_baterii_do_end %}
+            {% if E_after_plan_end < 0 %}
+              {% set E_after_plan_end = 0 %}
             {% endif %}
-            {% set soc_expected_22 = (((E_after_plan_22 + floor_kwh) / pojemnosc_kwh) * 100) | round(1) %}
-            {% if soc_expected_22 > 100 %}
-              {% set soc_expected_22 = 100 %}
+            {% set soc_expected_end = (((E_after_plan_end + floor_kwh) / pojemnosc_kwh) * 100) | round(1) %}
+            {% if soc_expected_end > 100 %}
+              {% set soc_expected_end = 100 %}
             {% endif %}
 
   
-            {{ current_slot_period }}###{{ cena_kwh | round(4) }}###{{ soc_stop_target }}###{{ pv_hours_debug }}###{{ E0_u | round(2) }}###{{ E_required_partial | round(2) }}###{{ E_reserve_u | round(2) }}###{{ sellable_partial_baseline | round(2) }}###{{ sellable_partial_after_full | round(2) }}###{{ sellable_full_now | round(2) }}###{{ battery_slot_u_full | round(2) }}###{{ (full_sorted | length) }}###{{ (partial_sorted | length) }}###{{ (plan_list | length) }}###{{ nsFull.batt_sum | round(2) }}###{{ nsPart.batt_sum | round(2) }}###{{ (nsFull.export_sum + nsPart.export_sum) | round(2) }}###{{ plan_list | join('|') }}###{{ in_plan_now }}###{{ top_lines }}###{{ nsCur.batt_use | round(3) }}###{{ nsCur.export_energy | round(3) }}###{{ nsCur.mode }}###{{ 'YES' if should_partial_now else 'NO' }}###{{ 'YES' if should_full_now else 'NO' }}###{{ soc_expected_22 }}###{{ reserve_do_konca_godziny_kwh | round(3) }}###{{ house_kwh_this_slot | round(3) }}
+            {{ current_slot_period }}###{{ cena_kwh | round(4) }}###{{ soc_stop_target }}###{{ pv_hours_debug }}###{{ E0_u | round(2) }}###{{ E_required_partial | round(2) }}###{{ E_reserve_u | round(2) }}###{{ sellable_partial_baseline | round(2) }}###{{ sellable_partial_after_full | round(2) }}###{{ sellable_full_now | round(2) }}###{{ battery_slot_u_full | round(2) }}###{{ (full_sorted | length) }}###{{ (partial_sorted | length) }}###{{ (plan_list | length) }}###{{ nsFull.batt_sum | round(2) }}###{{ nsPart.batt_sum | round(2) }}###{{ (nsFull.export_sum + nsPart.export_sum) | round(2) }}###{{ plan_list | join('|') }}###{{ in_plan_now }}###{{ top_lines }}###{{ nsCur.batt_use | round(3) }}###{{ nsCur.export_energy | round(3) }}###{{ nsCur.mode }}###{{ 'YES' if should_partial_now else 'NO' }}###{{ 'YES' if should_full_now else 'NO' }}###{{ soc_expected_end }}###{{ reserve_do_konca_godziny_kwh | round(3) }}###{{ house_kwh_this_slot | round(3) }}###{{ export_end_h }}###{{ 'YES' if export_end_h == 23 else 'NO' }}
   
       - variables:
           slot_period: "{{ pack.split('###')[0] }}"
@@ -1934,9 +1950,11 @@ automation:
           current_slot_mode: "{{ pack.split('###')[22] }}"
           should_partial_now: "{{ pack.split('###')[23] == 'YES' }}"
           should_full_now: "{{ pack.split('###')[24] == 'YES' }}"
-          soc_expected_22: "{{ pack.split('###')[25] | float(0) }}"
+          soc_expected_end: "{{ pack.split('###')[25] | float(0) }}"
           reserve_do_konca_godziny_kwh: "{{ pack.split('###')[26] | float(0) }}"
           house_kwh_this_slot: "{{ pack.split('###')[27] | float(0) }}"
+          export_end_hour_dbg: "{{ pack.split('###')[28] | int(22) }}"
+          export_po22_active_dbg: "{{ pack.split('###')[29] == 'YES' }}"
   
       # --- EMS1 plan vs realizacja: zamknij poprzedni slot, otwórz nowy ---
       - variables:
@@ -2004,12 +2022,15 @@ automation:
             plan_batt_sum_partial: "{{ plan_batt_sum_partial }}"
             plan_export_sum: "{{ plan_export_sum }}"
             pv_hours: "{{ pv_hours }}"
-            soc_expected_22: "{{ soc_expected_22 }}"  
+            soc_expected_end: "{{ soc_expected_end }}"
+            export_end_hour: "{{ export_end_hour_dbg }}"
+            export_po22_active: "{{ export_po22_active_dbg }}"
       - service: system_log.write
         data:
           level: warning
           message: >
             EXPORT_WIECZOR {{ t_now }} slot="{{ slot_period }}" price={{ cena_kwh_dbg | round(3) }}
+            | end={{ export_end_hour_dbg }}:00 po22={{ 'YES' if export_po22_active_dbg else 'NO' }}
             | prog_partial={{ prog_czesciowy | round(3) }} prog_full={{ prog_pelny | round(3) }}
             | SOC={{ soc_now | round(1) }}% stop={{ soc_stop_target }}%
             | E0={{ E0_u }} EreqPartial={{ E_required_partial }} Eres={{ E_reserve_u }}
@@ -2049,9 +2070,11 @@ automation:
                     💰 Najlepsze sloty:{{ top_lines }}
   
                     🔋 SOC: {{ soc_now | round(1) }}%
-                    🛡️ Komfort do 22:00: {{ soc_comfort_pct }}%
+                    🕒 Koniec sesji: {{ export_end_hour_dbg }}:00
+                    🌙 Eksport po 22: {{ 'TAK' if export_po22_active_dbg else 'NIE' }}
+                    🛡️ Komfort do {{ export_end_hour_dbg }}:00: {{ soc_comfort_pct }}%
                     🛡️ Floor techniczny: {{ soc_floor_pct }}%
-                    🔮 Spodziewany SOC o 22:00: {{ soc_expected_22 }}%
+                    🔮 Spodziewany SOC o {{ export_end_hour_dbg }}:00: {{ soc_expected_end }}%
   
       - choose:
           - conditions:
@@ -2138,7 +2161,7 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ t_now == '21:45' }}"
+                value_template: "{{ t_now == ('22:45' if export_po22_active_dbg else '21:45') }}"
             sequence:
               - service: script.ems_notify
                 data:
@@ -2148,7 +2171,7 @@ automation:
                     {% set sess_actual_w = states('var.ems1_session_actual_total_kwh') | float(0) %}
                     {% set eff_w = (sess_actual_w / sess_plan_w * 100) | round(1) if sess_plan_w > 0.01 else 0 %}
                     {% set daily_sold = states('sensor.solarman_daily_energy_sold') | float(0) %}
-                    📊 Plan vs Realizacja (sesja 15–22):
+                    📊 Plan vs Realizacja (sesja 15–{{ export_end_hour_dbg }}):
                     - Plan:        {{ sess_plan_w | round(2) }} kWh
                     - Realizacja:  {{ sess_actual_w | round(2) }} kWh
                     - Efektywność: {{ eff_w }}%
@@ -2166,7 +2189,7 @@ automation:
                     🔋 SOC teraz: {{ soc_now | round(1) }}%
                     🛡️ SOC stop dla tego slotu: {{ soc_stop_target }}%
                     ☀️ PV debug: {{ pv_hours }}
-                    🔮 Spodziewany SOC o 22:00: {{ soc_expected_22 }}%
+                    🔮 Spodziewany SOC o {{ export_end_hour_dbg }}:00: {{ soc_expected_end }}%
 
 
 ###############################################################################
@@ -2203,7 +2226,7 @@ automation:
 
 
   ###############################################################################
-  # NOCNA BLOKADA ROZŁADOWANIA (22:00)
+  # NOCNA BLOKADA ROZŁADOWANIA (22:00 / warunkowo 23:00)
   # v3.11:
   # - FULL = koszt_drozsza + min_zysk_sprzedaz
   # - PARTIAL = koszt_tansza + min_zysk_sprzedaz
@@ -2212,9 +2235,9 @@ automation:
   ###############################################################################
 
   - id: magazyn_blokada_rozladowania_noc_v3_11_plan_na_jutro
-    alias: "Magazyn: Blokada rozładowania na noc (22:00) v3.11"
+    alias: "Magazyn: Blokada rozładowania na noc (22/23) v3.12"
     description: >
-      O 22:00:
+      O 22:00, albo o 23:00 tylko gdy zaplanowano eksport po 22:
       - sprawdza dostępność danych PV na jutro
       - analizuje ceny rano (06:00-13:00)
       - analizuje prognozę PV na jutro
@@ -2229,22 +2252,35 @@ automation:
         * wybór slotów po cenie malejąco
         * automat pełni rolę blokady, nie planera ładowania
         * booked_soc nie spadnie poniżej var.magazyn_soc_min_rano_percent (floor rano)
+      - v3.12:
+        * gdy var.magazyn_plan_export_po_22 jest aktywny, 22:00 pomija booking
+          i wykonuje go dopiero o 23:00
+        * gdy flaga nie jest aktywna, 23:00 nic nie robi
     mode: single
   
     trigger:
       - platform: time
         at: "22:00:00"
+      - platform: time
+        at: "23:00:00"
   
     condition:
       - condition: template
         value_template: >
           {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_jutro', 'detailedForecast') or [] %}
-          {{ forecast_data | length > 0 }}
+          {% set po22 = (states('var.magazyn_plan_export_po_22') | int(0)) == 1
+             or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] %}
+          {% set h = now().hour %}
+          {{ forecast_data | length > 0 and ((h == 22 and not po22) or (h == 23 and po22)) }}
   
     action:
       - variables:
           soc_teraz: "{{ states('sensor.solarman_battery_safe') | float(0) }}"
           tz_to: "{{ now().strftime('%z')[0:3] ~ ':' ~ now().strftime('%z')[3:5] }}"
+          noc_booking_hour: "{{ now().hour }}"
+          export_po22_delayed_booking: >
+            {{ (states('var.magazyn_plan_export_po_22') | int(0)) == 1
+               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] }}
   
           koszt_tansza: "{{ states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0) }}"
           koszt_drozsza: "{{ states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) }}"
@@ -2653,8 +2689,9 @@ automation:
         data:
           level: warning
           message: >
-            NOC_V3_11 22:00
+            NOC_V3_12 {{ noc_booking_hour }}:00
             | soc_now={{ soc_teraz | round(1) }}%
+            | delayed_po22={{ 'YES' if export_po22_delayed_booking else 'NO' }}
             | mode={{ mode_dbg }}
             | will_spill={{ 'YES' if will_spill else 'NO' }}
             | spill_start_slot={{ spill_start_slot }}
@@ -2687,7 +2724,7 @@ automation:
   
               - service: script.ems_notify
                 data:
-                  title: "🌙 NOC v3.11: Brak blokady"
+                  title: "🌙 NOC v3.12: Brak blokady"
                   message: >
                     Poziom baterii {{ soc_teraz | round(0) }}% jest zbyt niski (<= 20%).
                     Pominięto ustawianie blokady.
@@ -2711,8 +2748,11 @@ automation:
   
               - service: script.ems_notify
                 data:
-                  title: "🌙 NOC v3.11: Booking magazynu na jutro"
+                  title: "🌙 NOC v3.12: Booking magazynu na jutro"
                   message: >
+                    Godzina bookingu: {{ noc_booking_hour }}:00
+                    Eksport po 22: {{ 'TAK' if export_po22_delayed_booking else 'NIE' }}
+
                     SOC teraz: {{ soc_teraz | round(0) }}%
                     Ustawiony limit: {{ limit_soc }}%
   
@@ -2748,6 +2788,16 @@ automation:
   
                     Godziny przepełnienia magazynu:
                     {{ spill_lines if spill_lines | length > 0 else '\n- brak' }}
+
+      - service: var.set
+        data:
+          entity_id: var.magazyn_plan_export_po_22
+          value: 0
+          attributes:
+            last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+            enabled: false
+            reset_by: "noc_v3_12_booking"
+            booking_hour: "{{ noc_booking_hour }}"
 
   ###############################################################################
   # BILANSOWANIE GODZINOWE — zadanie 2/2 (Asana 1214026027008583)

@@ -1668,7 +1668,7 @@ automation:
           WHERE m.entity_id = 'sensor.srednie_zuzycie_w_obecnym_slocie_30min'
             AND s.state NOT IN ('unknown', 'unavailable', '')
             AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 604800)
-            AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))/30)) BETWEEN 26 AND 43
+            AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))/30)) BETWEEN 26 AND 45
           GROUP BY slot
           ORDER BY slot;
 
@@ -2002,6 +2002,10 @@ automation:
           {% set export_required_total_u = 0.0 %}
           {% set export_reason = 'SKIP' %}
           {% set export_plan_lines = '' %}
+          {% set export_po22_enabled = false %}
+          {% set export_po22_period = '' %}
+          {% set export_po22_price = 0.0 %}
+          {% set export_end_hour_evening = 22 %}
 
           {% if export_topup_enabled and not blokada_spill %}
             {% set koszt_drozsza = states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) %}
@@ -2026,9 +2030,35 @@ automation:
             {% set battery_slot_u_full = max_moc_rozladowania_kw * 0.25 %}
             {% if battery_slot_u_full < 0 %}{% set battery_slot_u_full = 0 %}{% endif %}
 
+            {% set ns_po22 = namespace(enabled=false, period='', price_mwh=0.0) %}
+            {% for c in ceny_data %}
+              {% if c is mapping and c.period is defined %}
+                {% set p = (c.period | string).replace('–', '-') %}
+                {% set p2 = p.replace(' ', '') %}
+                {% if '-' in p2 %}
+                  {% set parts = p2.split('-') %}
+                  {% set hm = parts[0].split(':') %}
+                  {% if hm | length == 2 %}
+                    {% set h = hm[0] | int %}
+                    {% set price_mwh = c.rce_pln | float(0) %}
+                    {% set price_kwh = price_mwh / 1000 %}
+                    {% if h == 22 and price_kwh >= prog_czesciowy %}
+                      {% set ns_po22.enabled = true %}
+                      {% set ns_po22.period = c.period %}
+                      {% set ns_po22.price_mwh = price_mwh %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set export_po22_enabled = ns_po22.enabled %}
+            {% set export_po22_period = ns_po22.period %}
+            {% set export_po22_price = ns_po22.price_mwh %}
+            {% set export_end_hour_evening = 23 if export_po22_enabled else 22 %}
+
             {# suma per godzina = 2 sloty 30-min #}
             {% set ns_cons15 = namespace(total=0.0) %}
-            {% for h in range(15, 22) %}
+            {% for h in range(15, export_end_hour_evening) %}
               {% set ns_zh = namespace(v=0.0) %}
               {% for s in [h*2, h*2+1] %}
                 {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(h, (s%2)*30) %}
@@ -2039,10 +2069,10 @@ automation:
               {% endfor %}
               {% set ns_cons15.total = ns_cons15.total + ns_zh.v %}
             {% endfor %}
-            {% set cons_15_22 = ns_cons15.total %}
+            {% set cons_15_end = ns_cons15.total %}
 
             {% set ns_pv15 = namespace(total=0.0, d={}) %}
-            {% for h in range(15, 22) %}
+            {% for h in range(15, export_end_hour_evening) %}
               {% set ns_pv_h = namespace(v=0.0) %}
               {% for m in [0, 30] %}
                 {% for item in forecast_data %}
@@ -2056,13 +2086,13 @@ automation:
               {% set ns_pv15.total = ns_pv15.total + pv_corr_h %}
               {% set ns_pv15.d = ns_pv15.d | combine({ h: pv_corr_h }) %}
             {% endfor %}
-            {% set pv_15_22 = ns_pv15.total %}
+            {% set pv_15_end = ns_pv15.total %}
             {% set pv_d_15_22 = ns_pv15.d %}
 
-            {% set energia_dom_z_baterii_do_22 = cons_15_22 - pv_15_22 %}
-            {% if energia_dom_z_baterii_do_22 < 0 %}{% set energia_dom_z_baterii_do_22 = 0 %}{% endif %}
+            {% set energia_dom_z_baterii_do_end = cons_15_end - pv_15_end %}
+            {% if energia_dom_z_baterii_do_end < 0 %}{% set energia_dom_z_baterii_do_end = 0 %}{% endif %}
 
-            {% set E_required_partial_evening = energia_dom_z_baterii_do_22 + E_reserve_u_evening %}
+            {% set E_required_partial_evening = energia_dom_z_baterii_do_end + E_reserve_u_evening %}
             {% set sellable_full_now_evening = E15_after_base %}
             {% if sellable_full_now_evening < 0 %}{% set sellable_full_now_evening = 0 %}{% endif %}
 
@@ -2078,7 +2108,7 @@ automation:
                   {% if hm | length == 2 %}
                     {% set h = hm[0] | int %}
                     {% set price_kwh = (c.rce_pln | float(0)) / 1000 %}
-                    {% if h >= 15 and h < 22 and price_kwh >= prog_czesciowy %}
+                    {% if h >= 15 and h < export_end_hour_evening and price_kwh >= prog_czesciowy %}
                       {% set pv_h = pv_d_15_22.get(h, 0) %}
                       {% set ns_zh2 = namespace(v=0.0) %}
                       {% for s2 in [h*2, h*2+1] %}
@@ -2297,6 +2327,9 @@ automation:
           {% set ns.raport = ns.raport ~
             "\nEXPORT_TOPUP | feature:" ~ ('ON' if export_topup_enabled else 'OFF') ~
             " | reason:" ~ export_reason ~
+            " | end:" ~ export_end_hour_evening ~ ":00" ~
+            " | po22:" ~ ('YES' if export_po22_enabled else 'NO') ~
+            " | po22_price:" ~ export_po22_price|round(1) ~ "PLN/MWh" ~
             " | extra:" ~ export_extra_u|round(2) ~ "kWh" ~
             " | plan_batt:" ~ export_plan_batt_sum|round(2) ~ "kWh" ~
             " | required_total:" ~ export_required_total_u|round(2) ~ "kWh" ~
@@ -2312,7 +2345,23 @@ automation:
           %}
           {% set ns.raport = ns.raport ~ ns_stop.lines %}
 
-          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}
+          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}###{{ 'YES' if export_po22_enabled else 'NO' }}###{{ export_po22_period }}###{{ export_po22_price|round(1) }}###{{ export_end_hour_evening }}
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_plan_export_po_22
+        value: "{{ 1 if wyniki_pakiet.split('###')[39] == 'YES' else 0 }}"
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          enabled: "{{ wyniki_pakiet.split('###')[39] == 'YES' }}"
+          period: "{{ wyniki_pakiet.split('###')[40] }}"
+          price_mwh: "{{ wyniki_pakiet.split('###')[41] | float(0) }}"
+          export_end_hour: "{{ wyniki_pakiet.split('###')[42] | int(22) }}"
+          export_reason: "{{ wyniki_pakiet.split('###')[29] }}"
+          export_plan_batt_sum_kwh: "{{ wyniki_pakiet.split('###')[26] | float(0) }}"
+          export_required_total_kwh: "{{ wyniki_pakiet.split('###')[27] | float(0) }}"
+          target_soc: "{{ wyniki_pakiet.split('###')[1] | float(0) }}"
+          grid_add_export_kwh: "{{ wyniki_pakiet.split('###')[4] | float(0) }}"
 
     - service: var.set
       data:
@@ -2461,7 +2510,7 @@ automation:
 
     - service: script.ems_notify
       data:
-        title: "POPOŁUDNIE 13-22 | GRID: {{ wyniki_pakiet.split('###')[13] }} | TRYB: {{ wyniki_pakiet.split('###')[17] }}"
+        title: "POPOŁUDNIE 13-{{ wyniki_pakiet.split('###')[42] }} | GRID: {{ wyniki_pakiet.split('###')[13] }} | TRYB: {{ wyniki_pakiet.split('###')[17] }}"
         message: |-
           WYSTĄPIENIE: {{ now().strftime('%Y-%m-%d %H:%M:%S %z') }}
 
@@ -2496,6 +2545,10 @@ automation:
           EKSTRA DOŁADOWANIE POD ODDAWANIE:
           - Funkcja: {{ wyniki_pakiet.split('###')[25] }}
           - Status: {{ wyniki_pakiet.split('###')[29] }}
+          - Eksport po 22: {{ wyniki_pakiet.split('###')[39] }}
+          - Slot po 22: {{ wyniki_pakiet.split('###')[40] if wyniki_pakiet.split('###')[40] | length > 0 else 'brak' }}
+          - Cena po 22: {{ wyniki_pakiet.split('###')[41] }} PLN/MWh
+          - Koniec planu: {{ wyniki_pakiet.split('###')[42] }}:00
           - Energia planu eksportowego z baterii: {{ wyniki_pakiet.split('###')[26] }} kWh
           - Łączna energia wymagana na plan wieczorny: {{ wyniki_pakiet.split('###')[27] }} kWh
           - Limit dzienny: {{ wyniki_pakiet.split('###')[28] }} kWh
