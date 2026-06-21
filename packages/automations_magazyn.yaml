@@ -1275,11 +1275,17 @@ automation:
             {% set powod = 'LOWPV' %}
           {% endif %}
 
-          {# ===== URLOP: +1 kWh ponad wyliczenie, bez full, z catem o E6_safe_max ===== #}
+          {# ===== URLOP: +1 kWh ponad wyliczony plan, bez full, z capem o E6_safe_max =====
+             Bufor urlopowy ma byc staly wzgledem planu E6_plan. Nie dodawaj 1 kWh
+             do aktualnego SOC przy kazdym kolejnym triggerze 03:00/03:30/04:00. #}
           {% if urlop_any %}
-            {% set grid_add_u = grid_add_u + 1.0 %}
-            {% set grid_add_u = [grid_add_u, (max_ene_u - E6_base)] | min %}
-            {% set grid_add_u = [grid_add_u, [[E6_safe_max - E6_base, 0] | max, grid_add_floor_rano] | max] | min %}
+            {% set urlop_target_u = E6_plan + 1.0 %}
+            {% if urlop_target_u > max_ene_u %}{% set urlop_target_u = max_ene_u %}{% endif %}
+            {% set urlop_cap_u = [E6_safe_max, E6_req_floor_rano] | max %}
+            {% if urlop_cap_u > max_ene_u %}{% set urlop_cap_u = max_ene_u %}{% endif %}
+            {% if urlop_target_u > urlop_cap_u %}{% set urlop_target_u = urlop_cap_u %}{% endif %}
+            {% if urlop_target_u < E6_req_floor_rano %}{% set urlop_target_u = E6_req_floor_rano %}{% endif %}
+            {% set grid_add_u = [urlop_target_u - E6_base, 0] | max %}
             {% set E_start_u_new = E6_base + grid_add_u %}
             {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
             {% if cel < 25 %}{% set cel = 25 %}{% endif %}

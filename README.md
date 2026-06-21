@@ -138,6 +138,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 
 **Modyfikatory zużycia:**
 - `calendar.urlop` aktywny w danej godzinie → z_h = `var.magazyn_konsumpcja_urlop_kwh_h` (domyślnie 0,5 kWh; priorytet nadrzędny)
+- Przy aktywnym urlopie poranny plan dodaje stały bufor 1 kWh ponad wyliczony cel `E6_plan`; bufor nie narasta przy kolejnych triggerach 03:00/03:30/04:00.
 - `calendar.sprzatanie` aktywny → z_h = SQL × `var.magazyn_konsumpcja_mult_sprzatanie` (domyślnie ×2,0)
 - Brak kalendarza → z_h = SQL × `var.magazyn_konsumpcja_multiplier` (domyślnie ×1,15)
 
@@ -416,6 +417,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-06-21
+- **EMS1: poprawka urlopowego bufora porannego ładowania** (`packages/automations_magazyn.yaml`):
+  - `calendar.urlop` dodaje teraz stały bufor 1 kWh względem wyliczonego planu `E6_plan`, zamiast dodawać 1 kWh do aktualnego SOC przy każdym triggerze 03:00/03:30/04:00.
+  - Zapobiega schodkowemu podbijaniu celu ładowania, np. 41% → 44% → 47%, gdy magazyn już dobił do poprzedniego targetu.
 - **EMS1: warunkowy eksport wieczorny po 22:00** (`packages/automations_magazyn.yaml`, `packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`):
   - Plan 13-15 wykrywa opłacalny slot 22:00-23:00 i zapisuje `var.magazyn_plan_export_po_22`.
   - Eksport wieczorny działa do 23:00 tylko przy aktywnej fladze; bez flagi zachowanie zostaje 15:00-22:00.
