@@ -416,6 +416,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-06-23
+- **Nocny reset flooru SOC rano** (`packages/magazyn_nowyeksport.yaml`): uruchomienie nocnej blokady rozładowania (22:00 lub warunkowo 23:00) przywraca `var.magazyn_soc_min_rano_percent` do 25% przed bookingiem. Wartość ustalona pogodą o 05:29 dotyczy więc wyłącznie bieżącego poranka i nie przechodzi na kolejny dzień.
+
 ### 2026-06-21
 - **EMS1: poprawka urlopowego bufora porannego ładowania** (`packages/automations_magazyn.yaml`):
   - `calendar.urlop` dodaje teraz stały bufor 1 kWh względem wyliczonego planu `E6_plan`, zamiast dodawać 1 kWh do aktualnego SOC przy każdym triggerze 03:00/03:30/04:00.
