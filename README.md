@@ -208,6 +208,13 @@ minimum 1 pp. W rezultacie dla godziny 19 po slotach 19:00, 19:15, 19:30 i
 19:45 pozostaje odpowiednio 3%, 2%, 1% i 1% ponad floor (po uwzględnieniu
 energii potrzebnej domowi do 20:00).
 
+Strategiczny eksport jest opcjonalny (`input_boolean.magazyn_rezerwa_pod_eksport_strategiczny`).
+Plan 13–15 wyznacza próg `koszt_droższej + min_zysk × mnożnik` (domyślnie ×3),
+zapisuje target SOC i sloty spełniające próg. Po 15:00 magazyn utrzymuje target
+przez istniejący profil ładowania z sieci tylko, gdy PV nie pokrywa domu. W godzinie
+eksportu target nie może przekroczyć aktualnego SOC, a w samym slocie eksportowym
+ładowanie z sieci jest wyłączane.
+
 ---
 
 ## Doładowanie pod eksport (topup)

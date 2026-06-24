@@ -2371,6 +2371,31 @@ automation:
 
     - service: var.set
       data:
+        entity_id: var.magazyn_strategiczny_hold_soc
+        value: "{{ wyniki_pakiet.split('###')[1] | float(0) if is_state('input_boolean.magazyn_rezerwa_pod_eksport_strategiczny', 'on') else 0 }}"
+        attributes:
+          enabled: >-
+            {{ is_state('input_boolean.magazyn_rezerwa_pod_eksport_strategiczny', 'on')
+               and is_state('input_boolean.magazyn_doladowanie_pod_eksport_wieczor', 'on')
+               and (states('sensor.aktualny_limit_dzienny') | float(0) > 0) }}
+          threshold_pln_kwh: >-
+            {{ (states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0))
+               + (states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0)
+                  * states('var.magazyn_mnoznik_zysku_eksport_strategiczny') | float(3)) }}
+          slots: >-
+            {% set threshold = (states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0)) + (states('var.magazyn_min_zysk_sprzedaz_pln_kwh') | float(0) * states('var.magazyn_mnoznik_zysku_eksport_strategiczny') | float(3)) %}
+            {% set ns = namespace(items=[]) %}
+            {% for c in state_attr('sensor.rce_prices_today_scaled', 'value') or [] %}
+              {% if c is mapping and c.period is defined and (c.rce_pln | float(0) / 1000) >= threshold %}
+                {% set h = ((c.period | string).replace('–', '-').replace(' ', '').split('-')[0].split(':')[0]) | int(-1) %}
+                {% if h >= 15 and h <= 22 %}{% set ns.items = ns.items + [c.period | string] %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | join('|') }}
+          planned_at: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+    - service: var.set
+      data:
         entity_id: var.magazyn_soc_stop_ladowanie_popoludnie
         value: "{{ wyniki_pakiet.split('###')[31] | float(100) }}"
         attributes:

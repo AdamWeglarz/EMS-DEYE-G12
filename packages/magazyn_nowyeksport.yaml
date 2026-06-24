@@ -2231,6 +2231,58 @@ automation:
                     STOPPER_WIECZOR: SOC {{ soc_now | round(1) }}% <= {{ soc_stop | round(0) }}% -> battery_discharge_to_grid OFF
         default: []
 
+  - alias: "Magazyn: Utrzymaj SOC pod eksport strategiczny"
+    id: magazyn_strategiczny_hold_soc
+    mode: restart
+    trigger:
+      - platform: time_pattern
+        minutes: "/5"
+      - platform: state
+        entity_id:
+          - sensor.srednia_moc_z_pv_5_minut
+          - sensor.srednia_moc_pobierana_przez_dom_2_5_minut
+          - var.magazyn_strategiczny_hold_soc
+    condition:
+      - condition: time
+        after: "15:00:00"
+        before: "23:00:00"
+    action:
+      - variables:
+          enabled: "{{ state_attr('var.magazyn_strategiczny_hold_soc', 'enabled') in [true, 'True', 'true'] }}"
+          slots: "{{ (state_attr('var.magazyn_strategiczny_hold_soc', 'slots') | default('', true)).split('|') }}"
+          target_soc: "{{ states('var.magazyn_strategiczny_hold_soc') | float(0) }}"
+          soc_now: "{{ states('sensor.solarman_battery_safe') | float(0) }}"
+          pv_w: "{{ states('sensor.srednia_moc_z_pv_5_minut') | float(0) }}"
+          house_w: "{{ [states('sensor.srednia_moc_pobierana_przez_dom_2_5_minut') | float(0), 0] | max }}"
+          now_period: "{{ now().strftime('%H:%M') }}"
+          now_hour: "{{ now().hour }}"
+      - variables:
+          current_slot_export: >-
+            {% set ns = namespace(v=false) %}{% for p in slots %}{% if p.startswith(now_period) %}{% set ns.v = true %}{% endif %}{% endfor %}{{ ns.v }}
+          export_this_hour: >-
+            {% set ns = namespace(v=false) %}{% for p in slots %}{% if p.startswith('%02d:'|format(now_hour)) %}{% set ns.v = true %}{% endif %}{% endfor %}{{ ns.v }}
+          pv_covers_house: "{{ pv_w >= house_w }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ not enabled or slots == [''] or current_slot_export or pv_covers_house }}"
+            sequence:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.battery_charge_from_grid
+          - conditions:
+              - condition: template
+                value_template: "{{ enabled }}"
+            sequence:
+              - service: input_number.set_value
+                target:
+                  entity_id: input_number.manual_battery_charge_limit
+                data:
+                  value: "{{ [target_soc, soc_now] | min if export_this_hour else target_soc }}"
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.battery_charge_from_grid
+
 
 
   ###############################################################################

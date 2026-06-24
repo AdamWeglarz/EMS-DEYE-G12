@@ -21,6 +21,10 @@ input_boolean:
     name: Magazyn - doładowanie pod eksport wieczorny
     icon: mdi:battery-arrow-up-outline
 
+  magazyn_rezerwa_pod_eksport_strategiczny:
+    name: Magazyn - rezerwa pod eksport strategiczny
+    icon: mdi:battery-lock-outline
+
   magazyn_doladowanie_pod_eksport_poranek:
     name: Magazyn - doładowanie pod eksport poranny
     icon: mdi:battery-arrow-up-outline
@@ -313,6 +317,21 @@ var:
     friendly_name: "Magazyn: Minimalny zysk do sprzedaży (Δ taryf całkowitych)"
     icon: "mdi:cash-plus"
     initial_value: 0.38
+    restore: true
+
+  magazyn_mnoznik_zysku_eksport_strategiczny:
+    unique_id: magazyn_mnoznik_zysku_eksport_strategiczny
+    friendly_name: "Magazyn: mnożnik zysku eksportu strategicznego"
+    icon: mdi:cash-multiple
+    initial_value: 3
+    restore: true
+
+  magazyn_strategiczny_hold_soc:
+    unique_id: magazyn_strategiczny_hold_soc
+    friendly_name: "Magazyn: strategiczny cel utrzymania SOC"
+    icon: mdi:battery-lock
+    initial_value: 0
+    unit_of_measurement: "%"
     restore: true
 
   magazyn_spill_dzienny_kwh:
