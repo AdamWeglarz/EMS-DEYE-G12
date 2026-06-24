@@ -1720,8 +1720,12 @@ automation:
                  Przykład: mamy 0.5 kWh, dom zużyje 0.3 kWh w tym slocie, reserve=0
                  → eksportujemy tylko 0.2 kWh i stopujemy.
 
-                 SOC stop = floor + reserve_po_slocie
-                 (po zakończeniu slotu zostaje dokładnie tyle ile potrzebne na resztę godziny) #}
+                 Dodatkowo FULL odkłada 1 pp. SOC na każdy pełny kwadrans po
+                 bieżącym slocie, ale nigdy mniej niż 1 pp. Dzięki temu nawet
+                 w ostatnim slocie godziny nie schodzimy do samego floor.
+
+                 SOC stop = floor + reserve_po_slocie + bufor_SOC
+                 (po zakończeniu slotu zostaje energia na dom oraz bufor) #}
             {% set slot_end_min = slot_start_min + 15 %}
             {% set mins_rest_of_hour = 60 - slot_end_min %}
             {% set ns_zh_eoh = namespace(v=0.0) %}
@@ -1736,7 +1740,11 @@ automation:
             {% set pv_h_eoh = pv_d.get(h_now * 2, 0) + pv_d.get(h_now * 2 + 1, 0) %}
             {% set house_kwh_this_slot = [z_h_eoh * 15 / 60 - pv_h_eoh * 15 / 60, 0] | max %}
             {% set reserve_do_konca_godziny_kwh = [z_h_eoh * mins_rest_of_hour / 60 - pv_h_eoh * mins_rest_of_hour / 60, 0] | max %}
-            {% set sellable_full_now = [sellable_full_now - reserve_do_konca_godziny_kwh - house_kwh_this_slot, 0] | max %}
+            {% set pelne_sloty_po_biezacym = (mins_rest_of_hour / 15) | int(0) %}
+            {% set bufor_soc_do_konca_godziny_pct = [pelne_sloty_po_biezacym, 1] | max %}
+            {% set bufor_soc_do_konca_godziny_kwh = pojemnosc_kwh * bufor_soc_do_konca_godziny_pct / 100 %}
+            {% set rezerwa_full_do_konca_godziny_kwh = reserve_do_konca_godziny_kwh + bufor_soc_do_konca_godziny_kwh %}
+            {% set sellable_full_now = [sellable_full_now - rezerwa_full_do_konca_godziny_kwh - house_kwh_this_slot, 0] | max %}
   
             {% set battery_slot_u_full = max_moc_rozladowania_kw * 0.25 %}
             {% if battery_slot_u_full < 0 %}
@@ -1899,7 +1907,7 @@ automation:
   
             {% set soc_stop_target = (((E0_u - nsCur.batt_use + floor_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
             {% if nsCur.mode == 'full' %}
-              {% set soc_stop_target = (((floor_kwh + reserve_do_konca_godziny_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
+              {% set soc_stop_target = (((floor_kwh + rezerwa_full_do_konca_godziny_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
             {% endif %}
             {% if soc_stop_target > 100 %}
               {% set soc_stop_target = 100 %}

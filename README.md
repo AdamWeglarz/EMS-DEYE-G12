@@ -202,6 +202,11 @@ Analogiczna logika jak eksport poranny, ale dla okna 15–22. Warunek cenowy: ce
 Automatyzacja POŁUDNIE (13–15) co uruchomienie oblicza **najlepsze sloty cenowe** na wieczór (15–22h) i ewentualnie planuje dodatkowe ładowanie z sieci (`export_topup`), żeby mieć wystarczający SOC do sprzedania zaplanowanej energii. Nawet w trybie LOWPV (cel = 100%) sloty są kalkulowane i wyświetlane w notyfikacji – bateria jest już pełna, więc `export_topup` jest pomijany.
 
 SOC stop eksportu wieczornego: `var.magazyn_soc_stop_export_wieczor` (domyślnie 20%).
+W trybie **FULL** próg uwzględnia prognozowane zużycie do końca bieżącej godziny
+oraz dodatkowy bufor: 1 pp. SOC za każdy pełny kwadrans po bieżącym slocie,
+minimum 1 pp. W rezultacie dla godziny 19 po slotach 19:00, 19:15, 19:30 i
+19:45 pozostaje odpowiednio 3%, 2%, 1% i 1% ponad floor (po uwzględnieniu
+energii potrzebnej domowi do 20:00).
 
 ---
 
@@ -415,6 +420,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ---
 
 ## Historia zmian
+
+### 2026-06-24
+- **EMS1: minimalny bufor SOC w eksporcie wieczornym FULL** (`packages/magazyn_nowyeksport.yaml`): poza energią prognozowaną na zużycie domu do końca bieżącej godziny, plan i stopper zachowują dodatkowo 1 pp. SOC na każdy pełny kwadrans pozostały po aktywnym slocie, z minimum 1 pp. Ostatni slot godziny kończy się więc przy co najmniej 21% przy floorze 20%.
 
 ### 2026-06-23
 - **Nocny reset flooru SOC rano** (`packages/magazyn_nowyeksport.yaml`): uruchomienie nocnej blokady rozładowania (22:00 lub warunkowo 23:00) przywraca `var.magazyn_soc_min_rano_percent` do 25% przed bookingiem. Wartość ustalona pogodą o 05:29 dotyczy więc wyłącznie bieżącego poranka i nie przechodzi na kolejny dzień.
