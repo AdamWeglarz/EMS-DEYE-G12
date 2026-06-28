@@ -428,6 +428,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-06-28
+- **Finanse PV: koszt importu przy szybkim ładowaniu** (`packages/finanse_pv.yaml`): limit anty-spike dla delt importu/eksportu podniesiono z 3 do 10 kWh/15 min. Poprzedni próg odrzucał realne sloty ładowania magazynu powyżej 12 kW i zaniżał koszt importu poniżej minimalnej ceny G12 0.65 PLN/kWh.
+
 ### 2026-06-24
 - **EMS1: minimalny bufor SOC w eksporcie wieczornym FULL** (`packages/magazyn_nowyeksport.yaml`): poza energią prognozowaną na zużycie domu do końca bieżącej godziny, plan i stopper zachowują dodatkowo 1 pp. SOC na każdy pełny kwadrans pozostały po aktywnym slocie, z minimum 1 pp. Ostatni slot godziny kończy się więc przy co najmniej 21% przy floorze 20%.
 

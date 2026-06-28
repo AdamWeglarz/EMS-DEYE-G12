@@ -712,13 +712,13 @@ automation:
           prev_time_is_fresh: "{{ (prev_time_age_min | float(999)) <= 45 }}"
 
       - variables:
-          # Delta — zabezpieczenie przed: spike >3 kWh/15min (>12 kW), reset licznika (delta<0), inicjalizacja (prev=0)
+          # Delta — zabezpieczenie przed: spike >10 kWh/15min (>40 kW), reset licznika (delta<0), inicjalizacja (prev=0)
           delta_bought: >
             {% set d = bought_now - prev_bought %}
-            {{ d if (prev_time_is_fresh | bool(false) and prev_bought > 0 and d >= 0 and d < 3) else 0 }}
+            {{ d if (prev_time_is_fresh | bool(false) and prev_bought > 0 and d >= 0 and d < 10) else 0 }}
           delta_sold: >
             {% set d = sold_now - prev_sold %}
-            {{ d if (prev_time_is_fresh | bool(false) and prev_sold > 0 and d >= 0 and d < 3) else 0 }}
+            {{ d if (prev_time_is_fresh | bool(false) and prev_sold > 0 and d >= 0 and d < 10) else 0 }}
           delta_cons: >
             {% set d = cons_now - prev_cons %}
             {{ d if (prev_time_is_fresh | bool(false) and prev_cons > 0 and d >= 0 and d < 5) else 0 }}
