@@ -942,7 +942,7 @@ automation:
 
 
 
-- alias: "Magazyn: RANO (06-12) cel na 13:00 v6 + LOWPV + EXPORT topup"
+- alias: "Magazyn: RANO (02-06) cel na 13:00 v6 + LOWPV + EXPORT topup"
   id: magazyn_rano_cel_na_13_v6_lowpv_export_topup
   mode: single
   description: >
@@ -956,6 +956,10 @@ automation:
     ale z poszanowaniem celu SOC na 13:00.
 
   trigger:
+    - platform: time
+      at: "02:00:00"
+    - platform: time
+      at: "02:30:00"
     - platform: time
       at: "03:00:00"
     - platform: time
@@ -1277,7 +1281,7 @@ automation:
 
           {# ===== URLOP: +1 kWh ponad wyliczony plan, bez full, z capem o E6_safe_max =====
              Bufor urlopowy ma byc staly wzgledem planu E6_plan. Nie dodawaj 1 kWh
-             do aktualnego SOC przy kazdym kolejnym triggerze 03:00/03:30/04:00. #}
+             do aktualnego SOC przy kazdym kolejnym triggerze 02:00/02:30/03:00/03:30/04:00. #}
           {% if urlop_any %}
             {% set urlop_target_u = E6_plan + 1.0 %}
             {% if urlop_target_u > max_ene_u %}{% set urlop_target_u = max_ene_u %}{% endif %}
@@ -1553,7 +1557,7 @@ automation:
 
     - service: script.ems_notify
       data:
-        title: "RANO 06-13 | GRID: {{ wyniki_pakiet.split('###')[8] }} | TRYB: {{ wyniki_pakiet.split('###')[26] }}"
+        title: "RANO 02-06/06-13 | GRID: {{ wyniki_pakiet.split('###')[8] }} | TRYB: {{ wyniki_pakiet.split('###')[26] }}"
         message: |-
           TRYB: {{ wyniki_pakiet.split('###')[26] }}
           Cel limitu ładowania rano: {{ wyniki_pakiet.split('###')[0] }}%

@@ -74,7 +74,7 @@ recorder:
 
 ## Lista funkcjonalności
 
-- **Automatyczne ładowanie z sieci w oknie G12 RANO (03:00–06:00)** – precyzyjne wyznaczanie ilości energii do załadowania
+- **Automatyczne ładowanie z sieci w oknie G12 RANO (02:00–06:00)** – precyzyjne wyznaczanie ilości energii do załadowania
 - **Automatyczne ładowanie z sieci w oknie G12 POŁUDNIE (13:00–15:00)** – doładowanie przed wieczornym eksportem
 - **Eksport PV (oddawanie nadwyżki fotowoltaiki) 06:00–13:00** – 4 tryby od PV-only do pełnego rozładowania baterii
 - **Eksport wieczorny z baterii 15:00–22:00** – sprzedaż przy korzystnych cenach RCE
@@ -97,7 +97,7 @@ packages/
 ├── zmienne_zarzadzanie_pv.yaml   # Wszystkie parametry konfiguracyjne (var, input_boolean, input_number)
 ├── solarmansafe.yaml             # Sensory "safe" – stabilizacja odczytów falownika + statistics + min_max
 ├── sensors_sql_pv.yaml           # SQL: średnie zużycie godzinowe/30-min + energia oddana (slot 15min, 6-13, 15-22)
-├── automations_magazyn.yaml      # Główne automatyzacje: RANO (03-06) i POŁUDNIE (13-15)
+├── automations_magazyn.yaml      # Główne automatyzacje: RANO (02-06) i POŁUDNIE (13-15)
 ├── magazyn_nowyeksport.yaml      # Eksport: oddawanie poranne (06-13), wieczorne (15-22/23), blokada 22/23
 ├── magazynlimity.yaml            # Bilans eksportu, przeniesiona energia, sensory pomocnicze
 ├── finanse_pv.yaml               # Śledzenie oszczędności i przychodów ze sprzedaży
@@ -122,9 +122,9 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 
 ---
 
-## Planowanie ładowania – okno RANO (03:00–05:45)
+## Planowanie ładowania – okno RANO (02:00–05:45)
 
-**Kiedy działa:** trigery co 30 min między 03:00 a 05:45.
+**Kiedy działa:** trigery co 30 min między 02:00 a 05:45.
 
 **Cel:** doładować baterię z sieci (taryfa tańsza G12) tak, aby o 13:00 mieć zaplanowany SOC `var.cel_naladowania_o_13` (domyślnie 50%), nie spadając po drodze poniżej `var.magazyn_soc_min_rano_percent`.
 
@@ -138,7 +138,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 
 **Modyfikatory zużycia:**
 - `calendar.urlop` aktywny w danej godzinie → z_h = `var.magazyn_konsumpcja_urlop_kwh_h` (domyślnie 0,5 kWh; priorytet nadrzędny)
-- Przy aktywnym urlopie poranny plan dodaje stały bufor 1 kWh ponad wyliczony cel `E6_plan`; bufor nie narasta przy kolejnych triggerach 03:00/03:30/04:00.
+- Przy aktywnym urlopie poranny plan dodaje stały bufor 1 kWh ponad wyliczony cel `E6_plan`; bufor nie narasta przy kolejnych triggerach 02:00/02:30/03:00/03:30/04:00.
 - `calendar.sprzatanie` aktywny → z_h = SQL × `var.magazyn_konsumpcja_mult_sprzatanie` (domyślnie ×2,0)
 - Brak kalendarza → z_h = SQL × `var.magazyn_konsumpcja_multiplier` (domyślnie ×1,15)
 
@@ -225,7 +225,7 @@ Włączana osobno dla każdego okna:
 
 | Flaga | Okno | Działanie |
 |---|---|---|
-| `input_boolean.magazyn_doladowanie_pod_eksport_poranek` | RANO (03–06) | Planuje sprzedaż z baterii w slotach 06–11 z ceną ≥ BAT semi / BAT full; doładowuje o brakującą energię |
+| `input_boolean.magazyn_doladowanie_pod_eksport_poranek` | RANO (02–06) | Planuje sprzedaż z baterii w slotach 06–11 z ceną ≥ BAT semi / BAT full; doładowuje o brakującą energię |
 | `input_boolean.magazyn_doladowanie_pod_eksport_wieczor` | POŁUDNIE (13–15) | Planuje sprzedaż z baterii w slotach 15–22 z ceną ≥ próg; doładowuje o brakującą energię |
 
 **Algorytm (ETAP 2 w obu automatyzacjach):**
@@ -274,7 +274,7 @@ System dysponuje dwoma niezależnymi progami LOWPV:
 
 | Automatyzacja | Parametr | Domyślnie | Warunek |
 |---|---|---|---|
-| RANO (03–06) | `var.magazyn_lowpv_threshold_rano_kwh` | 8 kWh | Prognoza PV dziś (całodziennie) < próg → ładuj do 100% |
+| RANO (02–06) | `var.magazyn_lowpv_threshold_rano_kwh` | 8 kWh | Prognoza PV dziś (całodziennie) < próg → ładuj do 100% |
 | POŁUDNIE (13–15) | `var.magazyn_lowpv_threshold_popoludnie_kwh` | 8 kWh | Prognoza PV (skoryg. pozostało) < próg **i** nie wystarcza na full + konsumpcję do 15:00 → ładuj do 100% |
 
 W trybie LOWPV cel SOC = 100%; nadal kalkulowane są wieczorne sloty eksportu (do celów informacyjnych i przyszłego planowania), ale dodatkowe ładowanie pod eksport (`export_topup`) jest pomijane — bateria jest już pełna.
@@ -429,6 +429,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-06-28
+- **EMS1: poranne ładowanie 02:00-06:00** (`packages/automations_magazyn.yaml`): start planowania/ładowania przesunięto z 03:00 na 02:00 przez dodanie triggerów 02:00 i 02:30. Stop pozostaje o 06:00, żeby magazyn miał cztery godziny na dobicie do 100% w trybie LOWPV lub przy wysokim celu.
 - **Finanse PV: koszt importu przy szybkim ładowaniu** (`packages/finanse_pv.yaml`): limit anty-spike dla delt importu/eksportu podniesiono z 3 do 10 kWh/15 min. Poprzedni próg odrzucał realne sloty ładowania magazynu powyżej 12 kW i zaniżał koszt importu poniżej minimalnej ceny G12 0.65 PLN/kWh.
 
 ### 2026-06-24
