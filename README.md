@@ -343,6 +343,7 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 | `magazyn_pojemnosc_brutto_kwh` | 15,0 kWh | Pojemność baterii brutto |
 | `magazyn_soc_floor_percent` | 20% | Techniczne minimum SOC (korygowane przez pogodę) |
 | `cel_naladowania_o_13` | 50% | Docelowy SOC o 13:00 |
+| `magazyn_ladowanie_13_15_capacity_kwh` | 14 kWh | Zakładana energia możliwa do doładowania w oknie 13:00-15:00; konserwatywny limit do planowania, bo końcówka ładowania do 100% zwalnia |
 | `magazyn_lowpv_threshold_rano_kwh` | 8 kWh | LOWPV próg RANO – poniżej: ładuj do 100% |
 | `magazyn_lowpv_threshold_popoludnie_kwh` | 8 kWh | LOWPV próg POŁUDNIE – poniżej: ładuj do 100% |
 | `magazyn_min_zysk_sprzedaz_pln_kwh` | 0,38 PLN/kWh | Minimalny spread RCE do decyzji o sprzedaży |
@@ -429,6 +430,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-06-28
+- **EMS1: parametr pojemności ładowania 13-15** (`packages/zmienne_zarzadzanie_pv.yaml`): dodano `var.magazyn_ladowanie_13_15_capacity_kwh` z domyślną wartością 14 kWh jako konserwatywne założenie do przyszłej symulacji porannej.
 - **EMS1: poranne ładowanie 02:00-06:00** (`packages/automations_magazyn.yaml`): start planowania/ładowania przesunięto z 03:00 na 02:00 przez dodanie triggerów 02:00 i 02:30. Stop pozostaje o 06:00, żeby magazyn miał cztery godziny na dobicie do 100% w trybie LOWPV lub przy wysokim celu.
 - **Finanse PV: koszt importu przy szybkim ładowaniu** (`packages/finanse_pv.yaml`): limit anty-spike dla delt importu/eksportu podniesiono z 3 do 10 kWh/15 min. Poprzedni próg odrzucał realne sloty ładowania magazynu powyżej 12 kW i zaniżał koszt importu poniżej minimalnej ceny G12 0.65 PLN/kWh.
 

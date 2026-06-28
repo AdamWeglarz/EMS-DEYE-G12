@@ -79,6 +79,14 @@ var:
     initial_value: 0.75
     restore: true
 
+  magazyn_ladowanie_13_15_capacity_kwh:
+    unique_id: "magazyn_ladowanie_13_15_capacity_kwh"
+    friendly_name: "Magazyn: Zakładane ładowanie 13-15 (kWh)"
+    icon: "mdi:battery-clock"
+    initial_value: 14
+    unit_of_measurement: "kWh"
+    restore: true
+
   magazyn_soc_blokada_noc_min_percent:
     unique_id: "magazyn_soc_blokada_noc_min_percent"
     friendly_name: "Magazyn: Nocna blokada rozładowania min SOC (%)"
