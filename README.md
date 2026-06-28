@@ -129,12 +129,13 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 **Cel:** doładować baterię z sieci (taryfa tańsza G12) tak, aby o 13:00 mieć zaplanowany SOC `var.cel_naladowania_o_13` (domyślnie 50%), nie spadając po drodze poniżej `var.magazyn_soc_min_rano_percent`.
 
 **Algorytm:**
-1. Pobiera z SQL średnie zużycie dla slotów 30-min (sloty 6–25, tj. 03:00–13:00) z ostatnich 7 dni.
+1. Pobiera z SQL średnie zużycie dla slotów 30-min (sloty 6–43, tj. 03:00–22:00) z ostatnich 7 dni.
 2. Pobiera prognozę PV z Solcast (`detailedForecast`, sloty 30-min, 06:00–13:00 dziś).
 3. Symuluje slot po slocie (0..47): aktualna energia w baterii − zużycie + PV.
 4. Wyznacza minimalny `limit_soc` potrzebny do dotarcia do 13:00 bez zejścia poniżej `magazyn_soc_floor_percent` (20%).
 5. Jeśli prognoza PV < `var.magazyn_lowpv_threshold_rano_kwh` (domyślnie 8 kWh) → **tryb LOWPV**: ładuje do 100%.
 6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_poranek` = ON → **ETAP 2**: doładowuje pod planowany eksport poranny (patrz niżej).
+7. Robi pre-check popołudnia: szacuje wymagane `E15` dla okna 15–22, odejmuje saldo 13–15 oraz `var.magazyn_ladowanie_13_15_capacity_kwh`; jeśli okno 13–15 nie wystarczy, podnosi poranny cel, ale tylko do limitu bez spillu PV.
 
 **Modyfikatory zużycia:**
 - `calendar.urlop` aktywny w danej godzinie → z_h = `var.magazyn_konsumpcja_urlop_kwh_h` (domyślnie 0,5 kWh; priorytet nadrzędny)
@@ -430,6 +431,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-06-28
+- **EMS1: poranny pre-check ładowania pod popołudnie** (`packages/automations_magazyn.yaml`): poranny plan symuluje teraz 13–15 i 15–22, uwzględnia zakładane ładowanie 13–15 (`var.magazyn_ladowanie_13_15_capacity_kwh`) i podbija poranny target, jeśli samo okno 13–15 nie wystarczy do wymaganego `E15`; dodatkowe ładowanie jest ograniczone przez limit bez spillu PV.
 - **EMS1: parametr pojemności ładowania 13-15** (`packages/zmienne_zarzadzanie_pv.yaml`): dodano `var.magazyn_ladowanie_13_15_capacity_kwh` z domyślną wartością 14 kWh jako konserwatywne założenie do przyszłej symulacji porannej.
 - **EMS1: poranne ładowanie 02:00-06:00** (`packages/automations_magazyn.yaml`): start planowania/ładowania przesunięto z 03:00 na 02:00 przez dodanie triggerów 02:00 i 02:30. Stop pozostaje o 06:00, żeby magazyn miał cztery godziny na dobicie do 100% w trybie LOWPV lub przy wysokim celu.
 - **Finanse PV: koszt importu przy szybkim ładowaniu** (`packages/finanse_pv.yaml`): limit anty-spike dla delt importu/eksportu podniesiono z 3 do 10 kWh/15 min. Poprzedni próg odrzucał realne sloty ładowania magazynu powyżej 12 kW i zaniżał koszt importu poniżej minimalnej ceny G12 0.65 PLN/kWh.
