@@ -430,6 +430,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-06-29
+- **EMS1: poranny raport spillu używa zużycia do końca dnia** (`packages/magazyn_nowyeksport.yaml`): zapytanie SQL dla `dict_z` w porannym eksporcie pobiera teraz sloty zużycia do `23:30` zamiast kończyć na `13:30`, dzięki czemu po południu nie wpada fallback `1.5 kWh/30min` przy kalendarzu sprzątania.
+
 ### 2026-06-28
 - **EMS1: poranny pre-check ładowania pod popołudnie** (`packages/automations_magazyn.yaml`): poranny plan symuluje teraz 13–15 i 15–22, uwzględnia zakładane ładowanie 13–15 (`var.magazyn_ladowanie_13_15_capacity_kwh`) i podbija poranny target, jeśli samo okno 13–15 nie wystarczy do wymaganego `E15`; dodatkowe ładowanie jest ograniczone przez limit bez spillu PV.
 - **EMS1: parametr pojemności ładowania 13-15** (`packages/zmienne_zarzadzanie_pv.yaml`): dodano `var.magazyn_ladowanie_13_15_capacity_kwh` z domyślną wartością 14 kWh jako konserwatywne założenie do przyszłej symulacji porannej.

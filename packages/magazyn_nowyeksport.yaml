@@ -153,7 +153,7 @@ automation:
             WHERE m.entity_id = 'sensor.srednie_zuzycie_w_obecnym_slocie_30min'
               AND s.state NOT IN ('unknown', 'unavailable', '')
               AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - {{ lookback_sec }})
-              AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))/30)) BETWEEN {{ h_now * 2 }} AND 27
+              AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to[0:3] ~ ":" ~ tz_to[3:5] }}'))/30)) BETWEEN {{ h_now * 2 }} AND 47
             GROUP BY slot
             ORDER BY slot;
         response_variable: statystyki_konsumpcji
