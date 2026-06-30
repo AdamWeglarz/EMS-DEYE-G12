@@ -145,7 +145,7 @@ automation:
       - service: sql.query
         data:
           query: >
-            -- TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26
+            /* TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26 */
             SELECT slot, avg_h
             FROM (
               SELECT 0 AS slot, 0.450 AS avg_h
@@ -1552,7 +1552,7 @@ automation:
       - service: sql.query
         data:
           query: >
-            -- TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26
+            /* TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26 */
             SELECT slot, avg_h
             FROM (
               SELECT 0 AS slot, 0.450 AS avg_h
@@ -2462,7 +2462,7 @@ automation:
       - service: sql.query
         data:
           query: >
-            -- TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26
+            /* TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26 */
             SELECT slot, avg_h
             FROM (
               SELECT 0 AS slot, 0.450 AS avg_h
