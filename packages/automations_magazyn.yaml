@@ -983,16 +983,59 @@ automation:
     - variables:
         tz_to: "{{ now().strftime('%z')[0:3] ~ ':' ~ now().strftime('%z')[3:5] }}"
         sql_query: >
-          SELECT
-            (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))/30)) AS slot,
-            AVG(CAST(s.state AS DECIMAL(10,3))) AS avg_h
-          FROM states s
-          JOIN states_meta m ON s.metadata_id = m.metadata_id
-          WHERE m.entity_id = 'sensor.srednie_zuzycie_w_obecnym_slocie_30min'
-            AND s.state NOT IN ('unknown', 'unavailable', '')
-            AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 604800)
-            AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))/30)) BETWEEN 6 AND 43
-          GROUP BY slot
+          -- TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26
+          SELECT slot, avg_h
+          FROM (
+            SELECT 0 AS slot, 0.450 AS avg_h
+            UNION ALL SELECT 1 AS slot, 0.475 AS avg_h
+            UNION ALL SELECT 2 AS slot, 0.488 AS avg_h
+            UNION ALL SELECT 3 AS slot, 0.400 AS avg_h
+            UNION ALL SELECT 4 AS slot, 0.338 AS avg_h
+            UNION ALL SELECT 5 AS slot, 0.338 AS avg_h
+            UNION ALL SELECT 6 AS slot, 0.350 AS avg_h
+            UNION ALL SELECT 7 AS slot, 0.275 AS avg_h
+            UNION ALL SELECT 8 AS slot, 0.263 AS avg_h
+            UNION ALL SELECT 9 AS slot, 0.325 AS avg_h
+            UNION ALL SELECT 10 AS slot, 0.300 AS avg_h
+            UNION ALL SELECT 11 AS slot, 0.313 AS avg_h
+            UNION ALL SELECT 12 AS slot, 0.288 AS avg_h
+            UNION ALL SELECT 13 AS slot, 0.263 AS avg_h
+            UNION ALL SELECT 14 AS slot, 0.350 AS avg_h
+            UNION ALL SELECT 15 AS slot, 0.450 AS avg_h
+            UNION ALL SELECT 16 AS slot, 0.538 AS avg_h
+            UNION ALL SELECT 17 AS slot, 0.800 AS avg_h
+            UNION ALL SELECT 18 AS slot, 0.850 AS avg_h
+            UNION ALL SELECT 19 AS slot, 0.950 AS avg_h
+            UNION ALL SELECT 20 AS slot, 0.988 AS avg_h
+            UNION ALL SELECT 21 AS slot, 0.925 AS avg_h
+            UNION ALL SELECT 22 AS slot, 0.913 AS avg_h
+            UNION ALL SELECT 23 AS slot, 1.038 AS avg_h
+            UNION ALL SELECT 24 AS slot, 0.975 AS avg_h
+            UNION ALL SELECT 25 AS slot, 0.888 AS avg_h
+            UNION ALL SELECT 26 AS slot, 0.775 AS avg_h
+            UNION ALL SELECT 27 AS slot, 1.038 AS avg_h
+            UNION ALL SELECT 28 AS slot, 1.300 AS avg_h
+            UNION ALL SELECT 29 AS slot, 1.100 AS avg_h
+            UNION ALL SELECT 30 AS slot, 0.825 AS avg_h
+            UNION ALL SELECT 31 AS slot, 0.775 AS avg_h
+            UNION ALL SELECT 32 AS slot, 0.663 AS avg_h
+            UNION ALL SELECT 33 AS slot, 0.913 AS avg_h
+            UNION ALL SELECT 34 AS slot, 0.800 AS avg_h
+            UNION ALL SELECT 35 AS slot, 0.863 AS avg_h
+            UNION ALL SELECT 36 AS slot, 0.850 AS avg_h
+            UNION ALL SELECT 37 AS slot, 0.925 AS avg_h
+            UNION ALL SELECT 38 AS slot, 1.125 AS avg_h
+            UNION ALL SELECT 39 AS slot, 0.963 AS avg_h
+            UNION ALL SELECT 40 AS slot, 1.000 AS avg_h
+            UNION ALL SELECT 41 AS slot, 0.963 AS avg_h
+            UNION ALL SELECT 42 AS slot, 0.975 AS avg_h
+            UNION ALL SELECT 43 AS slot, 0.688 AS avg_h
+            UNION ALL SELECT 44 AS slot, 0.538 AS avg_h
+            UNION ALL SELECT 45 AS slot, 0.388 AS avg_h
+            UNION ALL SELECT 46 AS slot, 0.500 AS avg_h
+            UNION ALL SELECT 47 AS slot, 0.550 AS avg_h
+          ) static_usage
+          WHERE slot BETWEEN 6 AND 43
           ORDER BY slot;
 
     - service: sql.query
@@ -1808,16 +1851,59 @@ automation:
     - variables:
         tz_to: "{{ now().strftime('%z')[0:3] ~ ':' ~ now().strftime('%z')[3:5] }}"
         sql_query: >
-          SELECT
-            (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))/30)) AS slot,
-            AVG(CAST(s.state AS DECIMAL(10,3))) AS avg_h
-          FROM states s
-          JOIN states_meta m ON s.metadata_id = m.metadata_id
-          WHERE m.entity_id = 'sensor.srednie_zuzycie_w_obecnym_slocie_30min'
-            AND s.state NOT IN ('unknown', 'unavailable', '')
-            AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 604800)
-            AND (HOUR(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))*2 + FLOOR(MINUTE(CONVERT_TZ(FROM_UNIXTIME(s.last_updated_ts), '+00:00', '{{ tz_to }}'))/30)) BETWEEN 26 AND 45
-          GROUP BY slot
+          -- TEMP EMS1 2026-06-30: statyczna baza zuzycia z dni 2026-06-19..26
+          SELECT slot, avg_h
+          FROM (
+            SELECT 0 AS slot, 0.450 AS avg_h
+            UNION ALL SELECT 1 AS slot, 0.475 AS avg_h
+            UNION ALL SELECT 2 AS slot, 0.488 AS avg_h
+            UNION ALL SELECT 3 AS slot, 0.400 AS avg_h
+            UNION ALL SELECT 4 AS slot, 0.338 AS avg_h
+            UNION ALL SELECT 5 AS slot, 0.338 AS avg_h
+            UNION ALL SELECT 6 AS slot, 0.350 AS avg_h
+            UNION ALL SELECT 7 AS slot, 0.275 AS avg_h
+            UNION ALL SELECT 8 AS slot, 0.263 AS avg_h
+            UNION ALL SELECT 9 AS slot, 0.325 AS avg_h
+            UNION ALL SELECT 10 AS slot, 0.300 AS avg_h
+            UNION ALL SELECT 11 AS slot, 0.313 AS avg_h
+            UNION ALL SELECT 12 AS slot, 0.288 AS avg_h
+            UNION ALL SELECT 13 AS slot, 0.263 AS avg_h
+            UNION ALL SELECT 14 AS slot, 0.350 AS avg_h
+            UNION ALL SELECT 15 AS slot, 0.450 AS avg_h
+            UNION ALL SELECT 16 AS slot, 0.538 AS avg_h
+            UNION ALL SELECT 17 AS slot, 0.800 AS avg_h
+            UNION ALL SELECT 18 AS slot, 0.850 AS avg_h
+            UNION ALL SELECT 19 AS slot, 0.950 AS avg_h
+            UNION ALL SELECT 20 AS slot, 0.988 AS avg_h
+            UNION ALL SELECT 21 AS slot, 0.925 AS avg_h
+            UNION ALL SELECT 22 AS slot, 0.913 AS avg_h
+            UNION ALL SELECT 23 AS slot, 1.038 AS avg_h
+            UNION ALL SELECT 24 AS slot, 0.975 AS avg_h
+            UNION ALL SELECT 25 AS slot, 0.888 AS avg_h
+            UNION ALL SELECT 26 AS slot, 0.775 AS avg_h
+            UNION ALL SELECT 27 AS slot, 1.038 AS avg_h
+            UNION ALL SELECT 28 AS slot, 1.300 AS avg_h
+            UNION ALL SELECT 29 AS slot, 1.100 AS avg_h
+            UNION ALL SELECT 30 AS slot, 0.825 AS avg_h
+            UNION ALL SELECT 31 AS slot, 0.775 AS avg_h
+            UNION ALL SELECT 32 AS slot, 0.663 AS avg_h
+            UNION ALL SELECT 33 AS slot, 0.913 AS avg_h
+            UNION ALL SELECT 34 AS slot, 0.800 AS avg_h
+            UNION ALL SELECT 35 AS slot, 0.863 AS avg_h
+            UNION ALL SELECT 36 AS slot, 0.850 AS avg_h
+            UNION ALL SELECT 37 AS slot, 0.925 AS avg_h
+            UNION ALL SELECT 38 AS slot, 1.125 AS avg_h
+            UNION ALL SELECT 39 AS slot, 0.963 AS avg_h
+            UNION ALL SELECT 40 AS slot, 1.000 AS avg_h
+            UNION ALL SELECT 41 AS slot, 0.963 AS avg_h
+            UNION ALL SELECT 42 AS slot, 0.975 AS avg_h
+            UNION ALL SELECT 43 AS slot, 0.688 AS avg_h
+            UNION ALL SELECT 44 AS slot, 0.538 AS avg_h
+            UNION ALL SELECT 45 AS slot, 0.388 AS avg_h
+            UNION ALL SELECT 46 AS slot, 0.500 AS avg_h
+            UNION ALL SELECT 47 AS slot, 0.550 AS avg_h
+          ) static_usage
+          WHERE slot BETWEEN 26 AND 45
           ORDER BY slot;
 
     - service: sql.query

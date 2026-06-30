@@ -431,6 +431,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-06-30
+- **EMS1: tymczasowa statyczna baza zużycia dla plannerów** (`packages/automations_magazyn.yaml`, `packages/magazyn_nowyeksport.yaml`): 5 automatyzacji używających historii `sensor.srednie_zuzycie_w_obecnym_slocie_30min` dostało tymczasową tabelę `slot -> avg_h` wyliczoną z realnych danych `sensor.solarman_total_load_consumption_safe` z dni 2026-06-19..26. Dla okna 06:00-13:00 baza wynosi 10.216 kWh, więc przy kalendarzu sprzątania `x2` planner zakłada ok. 20.432 kWh zamiast zaniżonych wartości ze starej historii sensora. Zmiana jest oznaczona komentarzem `TEMP EMS1 2026-06-30` i powinna zostać usunięta po zebraniu poprawnej historii albo zastąpiona docelowym SQL-em z licznika.
 - **EMS1: poprawka średniej zużycia 30-min** (`packages/sensors_sql_pv.yaml`): `sensor.srednie_zuzycie_w_obecnym_slocie_30min` liczy teraz historyczną średnią bezpośrednio z `sensor.solarman_total_load_consumption_safe` jako różnicę licznika między początkiem i końcem bieżącego slotu w poprzednich dniach. Poprzednie `MAX-MIN` wewnątrz slotu zaniżało zużycie przy rzadkich próbkach licznika, co psuło planowanie poranne przy kalendarzu sprzątania.
 
 ### 2026-06-29
