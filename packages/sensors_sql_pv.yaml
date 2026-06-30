@@ -78,16 +78,45 @@ sql:
   - name: "Srednie zuzycie w obecnym slocie 30min"
     unique_id: "sql_avg_usage_current_slot_30min"
     query: >
-      SELECT AVG(corrected_diff) AS value
+      SELECT ROUND(AVG(corrected_diff), 6) AS value
       FROM (
         SELECT
           CASE
-            WHEN diff < 0 OR diff > 10 THEN default_kwh
+            WHEN diff IS NULL OR diff < 0 OR diff > 10 THEN default_kwh
             ELSE diff
           END AS corrected_diff
         FROM (
           SELECT
-            (MAX(CAST(s.state AS DECIMAL(10,3))) - MIN(CAST(s.state AS DECIMAL(10,3)))) AS diff,
+            d.local_date,
+            (
+              SELECT CAST(s_end.state AS DECIMAL(10,3))
+              FROM states s_end
+              JOIN states_meta m_end ON s_end.metadata_id = m_end.metadata_id
+              WHERE m_end.entity_id = 'sensor.solarman_total_load_consumption_safe'
+                AND s_end.state NOT IN ('unknown', 'unavailable', '')
+                AND s_end.last_updated_ts <= UNIX_TIMESTAMP(
+                  DATE_ADD(
+                    CONCAT(d.local_date, ' 00:00:00'),
+                    INTERVAL (HOUR(NOW()) * 3600 + FLOOR(MINUTE(NOW()) / 30) * 1800 + 1800) SECOND
+                  )
+                )
+              ORDER BY s_end.last_updated_ts DESC
+              LIMIT 1
+            ) - (
+              SELECT CAST(s_start.state AS DECIMAL(10,3))
+              FROM states s_start
+              JOIN states_meta m_start ON s_start.metadata_id = m_start.metadata_id
+              WHERE m_start.entity_id = 'sensor.solarman_total_load_consumption_safe'
+                AND s_start.state NOT IN ('unknown', 'unavailable', '')
+                AND s_start.last_updated_ts <= UNIX_TIMESTAMP(
+                  DATE_ADD(
+                    CONCAT(d.local_date, ' 00:00:00'),
+                    INTERVAL (HOUR(NOW()) * 3600 + FLOOR(MINUTE(NOW()) / 30) * 1800) SECOND
+                  )
+                )
+              ORDER BY s_start.last_updated_ts DESC
+              LIMIT 1
+            ) AS diff,
             (
               SELECT CAST(v.state AS DECIMAL(10,3)) / 2
               FROM states v
@@ -97,15 +126,15 @@ sql:
               ORDER BY v.last_updated_ts DESC
               LIMIT 1
             ) AS default_kwh
-          FROM states s
-          JOIN states_meta m ON s.metadata_id = m.metadata_id
-          WHERE m.entity_id = 'sensor.solarman_total_load_consumption'
-            AND s.state NOT IN ('unknown', 'unavailable', '')
-            AND HOUR(FROM_UNIXTIME(s.last_updated_ts)) = HOUR(NOW())
-            AND FLOOR(MINUTE(FROM_UNIXTIME(s.last_updated_ts)) / 30) = FLOOR(MINUTE(NOW()) / 30)
-            AND DATE(FROM_UNIXTIME(s.last_updated_ts)) < CURDATE()
-            AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 2592000)
-          GROUP BY DATE(FROM_UNIXTIME(s.last_updated_ts))
+          FROM (
+            SELECT DISTINCT DATE(FROM_UNIXTIME(s.last_updated_ts)) AS local_date
+            FROM states s
+            JOIN states_meta m ON s.metadata_id = m.metadata_id
+            WHERE m.entity_id = 'sensor.solarman_total_load_consumption_safe'
+              AND s.state NOT IN ('unknown', 'unavailable', '')
+              AND DATE(FROM_UNIXTIME(s.last_updated_ts)) < CURDATE()
+              AND s.last_updated_ts > (UNIX_TIMESTAMP(NOW()) - 2592000)
+          ) AS d
         ) AS daily
       ) AS subquery;
     column: "value"

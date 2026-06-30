@@ -430,6 +430,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-06-30
+- **EMS1: poprawka średniej zużycia 30-min** (`packages/sensors_sql_pv.yaml`): `sensor.srednie_zuzycie_w_obecnym_slocie_30min` liczy teraz historyczną średnią bezpośrednio z `sensor.solarman_total_load_consumption_safe` jako różnicę licznika między początkiem i końcem bieżącego slotu w poprzednich dniach. Poprzednie `MAX-MIN` wewnątrz slotu zaniżało zużycie przy rzadkich próbkach licznika, co psuło planowanie poranne przy kalendarzu sprzątania.
+
 ### 2026-06-29
 - **EMS1: poranny raport spillu używa zużycia do końca dnia** (`packages/magazyn_nowyeksport.yaml`): zapytanie SQL dla `dict_z` w porannym eksporcie pobiera teraz sloty zużycia do `23:30` zamiast kończyć na `13:30`, dzięki czemu po południu nie wpada fallback `1.5 kWh/30min` przy kalendarzu sprzątania.
 
