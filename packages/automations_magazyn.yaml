@@ -1127,6 +1127,13 @@ automation:
           {% if afternoon_charge_cap_u < 0 %}{% set afternoon_charge_cap_u = 0 %}{% endif %}
           {% if afternoon_charge_cap_u > max_ene_u %}{% set afternoon_charge_cap_u = max_ene_u %}{% endif %}
 
+          {% set afternoon_precheck_soc_cap_pct = states('var.magazyn_soc_cap_precheck_popoludnie_percent') | float(90) %}
+          {% if afternoon_precheck_soc_cap_pct < 25 %}{% set afternoon_precheck_soc_cap_pct = 25 %}{% endif %}
+          {% if afternoon_precheck_soc_cap_pct > 100 %}{% set afternoon_precheck_soc_cap_pct = 100 %}{% endif %}
+          {% set afternoon_precheck_cap_u = ((afternoon_precheck_soc_cap_pct / 100) * pojemnosc_kwh - prog_min_kwh) %}
+          {% if afternoon_precheck_cap_u < 0 %}{% set afternoon_precheck_cap_u = 0 %}{% endif %}
+          {% if afternoon_precheck_cap_u > max_ene_u %}{% set afternoon_precheck_cap_u = max_ene_u %}{% endif %}
+
           {# ===== PV dzienna ===== #}
           {% set pv_today_kwh = states('sensor.solcast_pv_forecast_prognoza_na_dzisiaj') | float(0) %}
           {% if pv_today_kwh == 0 %}
@@ -1362,6 +1369,7 @@ automation:
           {% set E6_req_afternoon = E13_required_afternoon - ns.S_post_13 %}
           {% if E6_req_afternoon < 0 %}{% set E6_req_afternoon = 0 %}{% endif %}
           {% if E6_req_afternoon > max_ene_u %}{% set E6_req_afternoon = max_ene_u %}{% endif %}
+          {% set E6_req_afternoon_raw = E6_req_afternoon %}
 
           {# ===== Stan na 06:00 ===== #}
           {% set E6_base = E0_u %}
@@ -1390,7 +1398,14 @@ automation:
           {% set E6_safe_max = max_ene_u - ns.Smax_post %}
           {% if E6_safe_max < 0 %}{% set E6_safe_max = 0 %}{% endif %}
           {% if E6_safe_max > max_ene_u %}{% set E6_safe_max = max_ene_u %}{% endif %}
-          {% set afternoon_reachable = 'YES' if E6_req_afternoon <= (E6_safe_max + 0.01) else 'NO' %}
+          {% set E6_afternoon_cap_max = afternoon_precheck_cap_u - ns.Smax_post %}
+          {% if E6_afternoon_cap_max < 0 %}{% set E6_afternoon_cap_max = 0 %}{% endif %}
+          {% if E6_afternoon_cap_max > max_ene_u %}{% set E6_afternoon_cap_max = max_ene_u %}{% endif %}
+          {% set E6_afternoon_limit_max = [E6_safe_max, E6_afternoon_cap_max] | min %}
+          {% set afternoon_cap_limited = E6_req_afternoon > (E6_afternoon_limit_max + 0.01) %}
+          {% set E6_req_afternoon = [E6_req_afternoon, E6_afternoon_limit_max] | min %}
+          {% if E6_req_afternoon < 0 %}{% set E6_req_afternoon = 0 %}{% endif %}
+          {% set afternoon_reachable = 'YES' if E6_req_afternoon_raw <= (E6_afternoon_limit_max + 0.01) else 'NO' %}
 
           {# ===== Bazowy plan poranny ===== #}
           {% set E6_plan_required = [E6_req_floor, E6_req_floor_rano, E6_req_target, E6_req_afternoon] | max %}
@@ -1416,8 +1431,12 @@ automation:
           {% if cel > 100 %}{% set cel = 100 %}{% endif %}
 
           {% set E6_req_without_afternoon = [E6_req_floor, E6_req_floor_rano, E6_req_target] | max %}
-          {% if E6_req_afternoon > (E6_req_without_afternoon + 0.01) %}
-            {% set powod = 'AFTERNOON' if afternoon_reachable == 'YES' else 'AFTERNOON_CAPPED_NO_SPILL' %}
+          {% if E6_req_afternoon_raw > (E6_req_without_afternoon + 0.01) %}
+            {% if afternoon_cap_limited %}
+              {% set powod = 'AFTERNOON_CAPPED_SOC_CAP' %}
+            {% else %}
+              {% set powod = 'AFTERNOON' if afternoon_reachable == 'YES' else 'AFTERNOON_CAPPED_NO_SPILL' %}
+            {% endif %}
           {% elif target_reachable == 'YES' %}
             {% set powod = 'TARGET13' %}
           {% else %}
@@ -1686,12 +1705,16 @@ automation:
             " | export_reason:" ~ afternoon_export_reason ~
             " | E15_required:" ~ E15_required_afternoon|round(2) ~ "kWh" ~
             " | E13_required:" ~ E13_required_afternoon|round(2) ~ "kWh" ~
+            " | E6_req_afternoon_raw:" ~ E6_req_afternoon_raw|round(2) ~ "kWh" ~
             " | E6_req_afternoon:" ~ E6_req_afternoon|round(2) ~ "kWh" ~
+            " | soc_cap:" ~ afternoon_precheck_soc_cap_pct|round(0) ~ "%" ~
+            " | cap_max:" ~ E6_afternoon_cap_max|round(2) ~ "kWh" ~
+            " | cap_limited:" ~ ('YES' if afternoon_cap_limited else 'NO') ~
             " | reachable:" ~ afternoon_reachable
           %}
           {% set ns.raport = ns.raport ~ nsA.txt %}
 
-          {{ cel_final }}###{{ grid_add_u|round(2) }}###{{ E6_base|round(2) }}###{{ E6_req_floor|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac_final else 'OFF' }}###{{ pv_today_kwh|round(2) }}###{{ 'YES' if force_full else 'NO' }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ target_soc_13|round(0) }}###{{ target_u_13|round(2) }}###{{ E6_req_target|round(2) }}###{{ E6_safe_max|round(2) }}###{{ target_reachable }}###{{ 'ON' if morning_export_topup_enabled else 'OFF' }}###{{ morning_export_extra_u|round(2) }}###{{ morning_export_plan_batt_sum|round(2) }}###{{ current_export_budget_u|round(2) }}###{{ max_export_budget_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ morning_export_reason }}###{{ morning_export_plan_lines }}###{{ powod }}###{{ E6_req_floor_rano|round(2) }}###{{ soc_min_rano|round(0) }}###{{ afternoon_charge_cap_u|round(2) }}###{{ E15_req_survival|round(2) }}###{{ afternoon_export_required_u|round(2) }}###{{ E15_required_afternoon|round(2) }}###{{ E13_required_afternoon|round(2) }}###{{ E6_req_afternoon|round(2) }}###{{ afternoon_reachable }}###{{ nsA.S_13_15|round(2) }}###{{ nsA.Smin_15_22|round(2) }}###{{ afternoon_export_reason }}###{{ afternoon_export_ideal_batt_u|round(2) }}
+          {{ cel_final }}###{{ grid_add_u|round(2) }}###{{ E6_base|round(2) }}###{{ E6_req_floor|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac_final else 'OFF' }}###{{ pv_today_kwh|round(2) }}###{{ 'YES' if force_full else 'NO' }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ target_soc_13|round(0) }}###{{ target_u_13|round(2) }}###{{ E6_req_target|round(2) }}###{{ E6_safe_max|round(2) }}###{{ target_reachable }}###{{ 'ON' if morning_export_topup_enabled else 'OFF' }}###{{ morning_export_extra_u|round(2) }}###{{ morning_export_plan_batt_sum|round(2) }}###{{ current_export_budget_u|round(2) }}###{{ max_export_budget_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ morning_export_reason }}###{{ morning_export_plan_lines }}###{{ powod }}###{{ E6_req_floor_rano|round(2) }}###{{ soc_min_rano|round(0) }}###{{ afternoon_charge_cap_u|round(2) }}###{{ E15_req_survival|round(2) }}###{{ afternoon_export_required_u|round(2) }}###{{ E15_required_afternoon|round(2) }}###{{ E13_required_afternoon|round(2) }}###{{ E6_req_afternoon|round(2) }}###{{ afternoon_reachable }}###{{ nsA.S_13_15|round(2) }}###{{ nsA.Smin_15_22|round(2) }}###{{ afternoon_export_reason }}###{{ afternoon_export_ideal_batt_u|round(2) }}###{{ afternoon_precheck_soc_cap_pct|round(0) }}###{{ E6_req_afternoon_raw|round(2) }}###{{ E6_afternoon_cap_max|round(2) }}###{{ 'YES' if afternoon_cap_limited else 'NO' }}
 
     - service: var.set
       data:
@@ -1778,6 +1801,10 @@ automation:
           - E6 wymagane przez popołudnie: {{ wyniki_pakiet.split('###')[34] }} kWh
           - Osiągalne bez spillu: {{ wyniki_pakiet.split('###')[35] }}
           - Wieczorny export pre-check: {{ wyniki_pakiet.split('###')[38] }}, ideal BAT: {{ wyniki_pakiet.split('###')[39] }} kWh
+          - Limit SOC pre-check: {{ wyniki_pakiet.split('###')[40] }}%
+          - E6 wymagane przed limitem SOC: {{ wyniki_pakiet.split('###')[41] }} kWh
+          - E6 max dla limitu SOC: {{ wyniki_pakiet.split('###')[42] }} kWh
+          - Czy obcięto limitem SOC: {{ wyniki_pakiet.split('###')[43] }}
 
           Spill PV (od 06:00): {{ wyniki_pakiet.split('###')[6] }} kWh
 

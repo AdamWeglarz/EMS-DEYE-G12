@@ -87,6 +87,14 @@ var:
     unit_of_measurement: "kWh"
     restore: true
 
+  magazyn_soc_cap_precheck_popoludnie_percent:
+    unique_id: "magazyn_soc_cap_precheck_popoludnie_percent"
+    friendly_name: "Magazyn: max SOC pre-check popołudnia (%)"
+    icon: "mdi:battery-90"
+    initial_value: 90
+    unit_of_measurement: "%"
+    restore: true
+
   magazyn_soc_blokada_noc_min_percent:
     unique_id: "magazyn_soc_blokada_noc_min_percent"
     friendly_name: "Magazyn: Nocna blokada rozładowania min SOC (%)"
