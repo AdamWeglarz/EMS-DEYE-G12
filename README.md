@@ -214,7 +214,9 @@ Plan 13–15 wyznacza próg `koszt_droższej + min_zysk × mnożnik` (domyślnie
 zapisuje target SOC i sloty spełniające próg. Po 15:00 magazyn utrzymuje target
 przez istniejący profil ładowania z sieci tylko, gdy PV nie pokrywa domu. W godzinie
 eksportu target nie może przekroczyć aktualnego SOC, a w samym slocie eksportowym
-ładowanie z sieci jest wyłączane.
+ładowanie z sieci jest wyłączane. Rozpoznanie bieżącego slotu działa na całym
+przedziale `HH:MM-HH:MM`, więc strażnik nie wraca do ładowania po pierwszych
+5 minutach slotu.
 
 ---
 
@@ -429,6 +431,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ---
 
 ## Historia zmian
+
+### 2026-07-05
+- **EMS1: strategiczny hold SOC nie blokuje eksportu w środku slotu** (`packages/magazyn_nowyeksport.yaml`): automatyzacja `Magazyn: Utrzymaj SOC pod eksport strategiczny` rozpoznaje teraz cały przedział slotu `HH:MM-HH:MM`, a nie tylko dokładny start. Dodatkowo aktywny `input_boolean.battery_discharge_to_grid` ma priorytet i wymusza wyłączenie `battery_charge_from_grid`.
 
 ### 2026-06-30
 - **EMS1: limit SOC dla porannego pre-checku popołudnia** (`packages/automations_magazyn.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`): dodano `var.magazyn_soc_cap_precheck_popoludnie_percent` z domyślną wartością 90%. Poranny planner, gdy podbija cel 06:00 pod przyszłe zapotrzebowanie 13–15 / 15–22, obcina wyłącznie komponent `E6_req_afternoon` tak, żeby w symulowanych slotach PV nie przekraczać tego SOC. Twarde minimum rano (`var.magazyn_soc_min_rano_percent`) i zwykły target 13:00 nie są tym limitem zaniżane.

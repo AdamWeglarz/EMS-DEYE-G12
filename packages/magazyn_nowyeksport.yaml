@@ -2339,16 +2339,36 @@ automation:
           house_w: "{{ [states('sensor.srednia_moc_pobierana_przez_dom_2_5_minut') | float(0), 0] | max }}"
           now_period: "{{ now().strftime('%H:%M') }}"
           now_hour: "{{ now().hour }}"
+          now_minute_of_day: "{{ now().hour * 60 + now().minute }}"
+          battery_export_active: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
       - variables:
           current_slot_export: >-
-            {% set ns = namespace(v=false) %}{% for p in slots %}{% if p.startswith(now_period) %}{% set ns.v = true %}{% endif %}{% endfor %}{{ ns.v }}
+            {% set ns = namespace(v=false) %}
+            {% for p_raw in slots %}
+              {% set p = (p_raw | string).replace('–', '-').replace(' ', '') %}
+              {% if '-' in p %}
+                {% set parts = p.split('-') %}
+                {% set start = parts[0].split(':') %}
+                {% set end = parts[1].split(':') %}
+                {% if start | length == 2 and end | length == 2 %}
+                  {% set start_min = (start[0] | int) * 60 + (start[1] | int) %}
+                  {% set end_min = (end[0] | int) * 60 + (end[1] | int) %}
+                  {% if now_minute_of_day | int >= start_min and now_minute_of_day | int < end_min %}
+                    {% set ns.v = true %}
+                  {% endif %}
+                {% endif %}
+              {% elif p.startswith(now_period) %}
+                {% set ns.v = true %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.v }}
           export_this_hour: >-
             {% set ns = namespace(v=false) %}{% for p in slots %}{% if p.startswith('%02d:'|format(now_hour)) %}{% set ns.v = true %}{% endif %}{% endfor %}{{ ns.v }}
           pv_covers_house: "{{ pv_w >= house_w }}"
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ not enabled or slots == [''] or current_slot_export or pv_covers_house }}"
+                value_template: "{{ not enabled or slots == [''] or current_slot_export or battery_export_active or pv_covers_house }}"
             sequence:
               - service: input_boolean.turn_off
                 target:
