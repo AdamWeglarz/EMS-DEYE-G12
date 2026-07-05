@@ -49,6 +49,117 @@ template:
             - states('sensor.solarman_today_losses') | float(0)
           ) | round(4) }}
 
+      - name: "EMS1: dzis PV"
+        unique_id: ems1_daily_pv_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:solar-power-variant
+        state: >
+          {{ states('sensor.solarman_microinverter_energy_today_safe') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis load"
+        unique_id: ems1_daily_load_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:home-lightning-bolt
+        state: >
+          {{ states('sensor.solarman_today_load_consumption') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis grid import"
+        unique_id: ems1_daily_grid_import_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:transmission-tower-import
+        state: >
+          {{ states('sensor.solarman_daily_energy_bought_safe') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis grid eksport"
+        unique_id: ems1_daily_grid_export_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:transmission-tower-export
+        state: >
+          {{ states('sensor.solarman_daily_energy_sold_safe') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis magazyn ladowanie"
+        unique_id: ems1_daily_battery_charge_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:battery-arrow-down-outline
+        state: >
+          {{ states('sensor.solarman_daily_battery_charge') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis magazyn rozladowanie"
+        unique_id: ems1_daily_battery_discharge_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:battery-arrow-up-outline
+        state: >
+          {{ states('sensor.solarman_daily_battery_discharge') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis magazyn netto"
+        unique_id: ems1_daily_battery_net_kwh
+        unit_of_measurement: "kWh"
+        state_class: measurement
+        icon: mdi:battery-sync
+        state: >
+          {{ (
+            states('sensor.ems1_dzis_magazyn_ladowanie') | float(0)
+            - states('sensor.ems1_dzis_magazyn_rozladowanie') | float(0)
+          ) | round(2) }}
+
+      - name: "EMS1: dzis energia pokryta bez importu"
+        unique_id: ems1_daily_saved_energy_kwh
+        unit_of_measurement: "kWh"
+        state_class: measurement
+        icon: mdi:leaf-circle-outline
+        state: >
+          {% set load = states('sensor.ems1_dzis_load') | float(0) %}
+          {% set grid_import = states('sensor.ems1_dzis_grid_import') | float(0) %}
+          {{ [load - grid_import, 0] | max | round(2) }}
+
+      - name: "EMS1: dzis oszczednosc G12"
+        unique_id: ems1_daily_savings_g12_pln
+        unit_of_measurement: "PLN"
+        device_class: monetary
+        state_class: measurement
+        icon: mdi:piggy-bank-outline
+        state: >
+          {{ states('sensor.finanse_oszczednosc_vs_g12_dzis') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis oszczednosc G11"
+        unique_id: ems1_daily_savings_g11_pln
+        unit_of_measurement: "PLN"
+        device_class: monetary
+        state_class: measurement
+        icon: mdi:piggy-bank
+        state: >
+          {{ states('sensor.finanse_oszczednosc_vs_g11_dzis') | float(0) | round(2) }}
+
+      - name: "EMS1: dzis koszt netto"
+        unique_id: ems1_daily_net_cost_pln
+        unit_of_measurement: "PLN"
+        device_class: monetary
+        state_class: measurement
+        icon: mdi:cash
+        state: >
+          {{ states('sensor.finanse_koszt_netto_dzis') | float(0) | round(2) }}
+
+      - name: "EMS1: bilans dzienny opis"
+        unique_id: ems1_daily_balance_summary
+        icon: mdi:clipboard-list-outline
+        state: >
+          PV {{ states('sensor.ems1_dzis_pv') }} kWh |
+          Load {{ states('sensor.ems1_dzis_load') }} kWh |
+          Grid {{ states('sensor.ems1_dzis_grid_import') }}/{{ states('sensor.ems1_dzis_grid_eksport') }} kWh |
+          BAT {{ states('sensor.ems1_dzis_magazyn_ladowanie') }}/{{ states('sensor.ems1_dzis_magazyn_rozladowanie') }} kWh
+
       - name: "EMS1: PV aktualne"
         unique_id: ems1_pv_actual_kw
         unit_of_measurement: "kW"

@@ -84,6 +84,36 @@ views:
           - sensor.solarman_battery_safe
 
       - type: entities
+        title: "Bilans dzienny: Load / Grid / PV / Magazyn"
+        entities:
+          - entity: sensor.ems1_dzis_load
+            name: Load
+          - entity: sensor.ems1_dzis_pv
+            name: PV
+          - entity: sensor.ems1_dzis_grid_import
+            name: Grid import
+          - entity: sensor.ems1_dzis_grid_eksport
+            name: Grid eksport
+          - entity: sensor.ems1_dzis_magazyn_ladowanie
+            name: Magazyn ładowanie
+          - entity: sensor.ems1_dzis_magazyn_rozladowanie
+            name: Magazyn rozładowanie
+          - entity: sensor.ems1_dzis_magazyn_netto
+            name: Magazyn netto
+          - entity: sensor.ems1_bilans_dzienny
+            name: Bilans kontrolny
+          - entity: sensor.ems1_dzis_energia_pokryta_bez_importu
+            name: Energia pokryta bez importu
+          - entity: sensor.ems1_dzis_oszczednosc_g12
+            name: Oszczędność vs G12
+          - entity: sensor.ems1_dzis_oszczednosc_g11
+            name: Oszczędność vs G11
+          - entity: sensor.ems1_dzis_koszt_netto
+            name: Koszt netto
+          - entity: sensor.ems1_bilans_dzienny_opis
+            name: Skrót
+
+      - type: entities
         title: Ceny energii
         entities:
           - sensor.rce_prices_today_scaled

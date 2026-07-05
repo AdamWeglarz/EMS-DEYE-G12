@@ -323,6 +323,20 @@ Oszczędność = Koszt_G12_bez_PV − (Koszt_importu − Przychód_eksportu)
 
 ---
 
+## EMS1 Dashboard
+
+**Pliki:** `packages/ems1_dashboard.yaml`, `dashboards/ems1_shadow.yaml`
+
+Dashboard EMS1 ma kartę **Bilans dzienny: Load / Grid / PV / Magazyn**, która
+zbiera w jednym miejscu dzienne statystyki energii: load, PV, grid import/eksport,
+ładowanie/rozładowanie magazynu, netto magazynu i bilans kontrolny. Karta pokazuje
+też `sensor.ems1_dzis_energia_pokryta_bez_importu` oraz live liczniki oszczędności
+vs G12/G11 (`sensor.ems1_dzis_oszczednosc_g12`, `sensor.ems1_dzis_oszczednosc_g11`).
+Oszczędności korzystają z tych samych akumulatorów `finanse_pv`, które trafiają do
+podsumowania dziennego o 23:59.
+
+---
+
 ## Sensory "safe"
 
 **Plik:** `solarmansafe.yaml`
@@ -433,6 +447,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-07-05
+- **EMS1 Dashboard: jedna grupa dziennego bilansu energii** (`packages/ems1_dashboard.yaml`, `dashboards/ems1_shadow.yaml`): dodano sensory Load/Grid/PV/Magazyn, licznik energii pokrytej bez importu oraz live liczniki oszczędności vs G12/G11 oparte o te same akumulatory, które są używane w nocnym podsumowaniu finansów.
 - **EMS1: strategiczny hold SOC nie blokuje eksportu w środku slotu** (`packages/magazyn_nowyeksport.yaml`): automatyzacja `Magazyn: Utrzymaj SOC pod eksport strategiczny` rozpoznaje teraz cały przedział slotu `HH:MM-HH:MM`, a nie tylko dokładny start. Dodatkowo aktywny `input_boolean.battery_discharge_to_grid` ma priorytet i wymusza wyłączenie `battery_charge_from_grid`.
 
 ### 2026-06-30
