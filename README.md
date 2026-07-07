@@ -468,6 +468,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 - **EMS1: poranne ładowanie 02:00-06:00** (`packages/automations_magazyn.yaml`): start planowania/ładowania przesunięto z 03:00 na 02:00 przez dodanie triggerów 02:00 i 02:30. Stop pozostaje o 06:00, żeby magazyn miał cztery godziny na dobicie do 100% w trybie LOWPV lub przy wysokim celu.
 - **Finanse PV: koszt importu przy szybkim ładowaniu** (`packages/finanse_pv.yaml`): limit anty-spike dla delt importu/eksportu podniesiono z 3 do 10 kWh/15 min. Poprzedni próg odrzucał realne sloty ładowania magazynu powyżej 12 kW i zaniżał koszt importu poniżej minimalnej ceny G12 0.65 PLN/kWh.
 
+### 2026-07-07
+- **EMS1: blokada fałszywego eksportu po 22** (`packages/automations_magazyn.yaml`, `packages/magazyn_nowyeksport.yaml`): flaga `var.magazyn_plan_export_po_22` jest teraz aktywna tylko dla planu z bieżącej daty i tylko wtedy, gdy slot 22:00-23:00 faktycznie trafił do planu eksportu z energią. Sam dobry próg ceny po 22 nie wystarcza już do przesunięcia końca sesji na 23:00.
+
 ### 2026-06-24
 - **EMS1: minimalny bufor SOC w eksporcie wieczornym FULL** (`packages/magazyn_nowyeksport.yaml`): poza energią prognozowaną na zużycie domu do końca bieżącej godziny, plan i stopper zachowują dodatkowo 1 pp. SOC na każdy pełny kwadrans pozostały po aktywnym slocie, z minimum 1 pp. Ostatni slot godziny kończy się więc przy co najmniej 21% przy floorze 20%.
 

@@ -1515,11 +1515,15 @@ automation:
           t_now: "{{ now().strftime('%H:%M') }}"
           was_discharging: "{{ is_state('input_boolean.battery_discharge_to_grid', 'on') }}"
           export_po22_active: >
-            {{ (states('var.magazyn_plan_export_po_22') | int(0)) == 1
-               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] }}
+            {% set planned_date = state_attr('var.magazyn_plan_export_po_22', 'planned_date') | default('', true) %}
+            {% set enabled = (states('var.magazyn_plan_export_po_22') | int(0)) == 1
+               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] %}
+            {{ enabled and planned_date == (now().date() | string) }}
           export_end_hour: >
-            {{ 23 if ((states('var.magazyn_plan_export_po_22') | int(0)) == 1
-               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON']) else 22 }}
+            {% set planned_date = state_attr('var.magazyn_plan_export_po_22', 'planned_date') | default('', true) %}
+            {% set enabled = (states('var.magazyn_plan_export_po_22') | int(0)) == 1
+               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] %}
+            {{ 23 if (enabled and planned_date == (now().date() | string)) else 22 }}
   
           # Koszty / progi
           koszt_drozsza: "{{ states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) }}"
@@ -1604,7 +1608,7 @@ automation:
               UNION ALL SELECT 46 AS slot, 0.500 AS avg_h
               UNION ALL SELECT 47 AS slot, 0.550 AS avg_h
             ) static_usage
-            WHERE slot BETWEEN {{ h_now * 2 + (m_now // 30) }} AND {{ 45 if ((states('var.magazyn_plan_export_po_22') | int(0)) == 1 or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON']) else 43 }}
+            WHERE slot BETWEEN {{ h_now * 2 + (m_now // 30) }} AND {{ 45 if export_po22_active else 43 }}
             ORDER BY slot;
         response_variable: statystyki_wieczor
 
@@ -2432,8 +2436,10 @@ automation:
       - condition: template
         value_template: >
           {% set forecast_data = state_attr('sensor.solcast_pv_forecast_prognoza_na_jutro', 'detailedForecast') or [] %}
-          {% set po22 = (states('var.magazyn_plan_export_po_22') | int(0)) == 1
+          {% set planned_date = state_attr('var.magazyn_plan_export_po_22', 'planned_date') | default('', true) %}
+          {% set po22_enabled = (states('var.magazyn_plan_export_po_22') | int(0)) == 1
              or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] %}
+          {% set po22 = po22_enabled and planned_date == (now().date() | string) %}
           {% set h = now().hour %}
           {{ forecast_data | length > 0 and ((h == 22 and not po22) or (h == 23 and po22)) }}
   
@@ -2450,8 +2456,10 @@ automation:
           tz_to: "{{ now().strftime('%z')[0:3] ~ ':' ~ now().strftime('%z')[3:5] }}"
           noc_booking_hour: "{{ now().hour }}"
           export_po22_delayed_booking: >
-            {{ (states('var.magazyn_plan_export_po_22') | int(0)) == 1
-               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] }}
+            {% set planned_date = state_attr('var.magazyn_plan_export_po_22', 'planned_date') | default('', true) %}
+            {% set enabled = (states('var.magazyn_plan_export_po_22') | int(0)) == 1
+               or state_attr('var.magazyn_plan_export_po_22', 'enabled') in [true, 'True', 'true', 'on', 'ON'] %}
+            {{ enabled and planned_date == (now().date() | string) }}
   
           koszt_tansza: "{{ states('var.magazyn_koszt_calkowity_strefa_tansza_pln_kwh') | float(0) }}"
           koszt_drozsza: "{{ states('var.magazyn_koszt_calkowity_strefa_drozsza_pln_kwh') | float(0) }}"

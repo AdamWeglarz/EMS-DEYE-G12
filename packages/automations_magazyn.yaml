@@ -2606,7 +2606,8 @@ automation:
           %}
           {% set ns.raport = ns.raport ~ ns_stop.lines %}
 
-          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}###{{ 'YES' if export_po22_enabled else 'NO' }}###{{ export_po22_period }}###{{ export_po22_price|round(1) }}###{{ export_end_hour_evening }}
+          {% set export_po22_planned = export_po22_enabled and export_po22_period | length > 0 and export_po22_period in export_plan_lines %}
+          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}###{{ 'YES' if export_po22_planned else 'NO' }}###{{ export_po22_period }}###{{ export_po22_price|round(1) }}###{{ 23 if export_po22_planned else 22 }}
 
     - service: var.set
       data:
@@ -2615,6 +2616,7 @@ automation:
         attributes:
           last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
           enabled: "{{ wyniki_pakiet.split('###')[39] == 'YES' }}"
+          planned_date: "{{ now().date() | string }}"
           period: "{{ wyniki_pakiet.split('###')[40] }}"
           price_mwh: "{{ wyniki_pakiet.split('###')[41] | float(0) }}"
           export_end_hour: "{{ wyniki_pakiet.split('###')[42] | int(22) }}"
