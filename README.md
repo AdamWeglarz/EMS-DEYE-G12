@@ -446,6 +446,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ## Historia zmian
 
+### 2026-07-07
+- **EMS1: strategiczny hold SOC nie kasuje nocnej blokady** (`packages/magazyn_nowyeksport.yaml`): automatyzacja `Magazyn: Utrzymaj SOC pod eksport strategiczny` wyłącza teraz wspólny `input_boolean.battery_charge_from_grid` tylko wtedy, gdy strategiczny hold jest aktywny. Gdy `var.magazyn_strategiczny_hold_soc.enabled` jest false, nie dotyka trybu ładowania/hold SOC używanego przez nocną blokadę i poranny planner.
+
 ### 2026-07-05
 - **EMS1 Dashboard: jedna grupa dziennego bilansu energii** (`packages/ems1_dashboard.yaml`, `dashboards/ems1_shadow.yaml`): dodano sensory Load/Grid/PV/Magazyn, licznik energii pokrytej bez importu oraz live liczniki oszczędności vs G12/G11 oparte o te same akumulatory, które są używane w nocnym podsumowaniu finansów.
 - **EMS1: strategiczny hold SOC nie blokuje eksportu w środku slotu** (`packages/magazyn_nowyeksport.yaml`): automatyzacja `Magazyn: Utrzymaj SOC pod eksport strategiczny` rozpoznaje teraz cały przedział slotu `HH:MM-HH:MM`, a nie tylko dokładny start. Dodatkowo aktywny `input_boolean.battery_discharge_to_grid` ma priorytet i wymusza wyłączenie `battery_charge_from_grid`.

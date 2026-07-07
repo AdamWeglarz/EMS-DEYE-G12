@@ -2368,7 +2368,7 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ not enabled or slots == [''] or current_slot_export or battery_export_active or pv_covers_house }}"
+                value_template: "{{ enabled and (slots == [''] or current_slot_export or battery_export_active or pv_covers_house) }}"
             sequence:
               - service: input_boolean.turn_off
                 target:
