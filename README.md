@@ -447,6 +447,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ## Historia zmian
 
 ### 2026-07-07
+- **EMS1: eksport wraca do podsumowania finansowego 23:59** (`packages/solarmansafe.yaml`, `packages/finanse_pv.yaml`): sensory `Solarman Total Energy Bought/Sold Safe` potrafią teraz wrócić do realnego totalizera po dużym historycznym przekłamaniu w górę, zamiast blokować się na zawyżonym `max(raw, prev)`. Akumulacja finansów dostała dodatkowy trigger `23:58:30`, żeby przed resetem 23:59 domknąć eksport/import z ostatniego slotu dnia.
 - **EMS1: strategiczny hold SOC nie kasuje nocnej blokady** (`packages/magazyn_nowyeksport.yaml`): automatyzacja `Magazyn: Utrzymaj SOC pod eksport strategiczny` wyłącza teraz wspólny `input_boolean.battery_charge_from_grid` tylko wtedy, gdy strategiczny hold jest aktywny. Gdy `var.magazyn_strategiczny_hold_soc.enabled` jest false, nie dotyka trybu ładowania/hold SOC używanego przez nocną blokadę i poranny planner.
 
 ### 2026-07-05

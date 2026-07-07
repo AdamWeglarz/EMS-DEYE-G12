@@ -220,6 +220,10 @@ template:
   - trigger:
       - platform: state
         entity_id: sensor.solarman_total_energy_bought
+      - platform: homeassistant
+        event: start
+      - platform: event
+        event_type: event_template_reloaded
     sensor:
       - name: "Solarman Total Energy Bought Safe"
         unique_id: solarman_total_energy_bought_safe
@@ -238,7 +242,11 @@ template:
               {{ raw | round(3) }}
             {% else %}
               {% set prev = prev_s | float(0) %}
-              {{ [raw, prev] | max | round(3) }}
+              {% if raw > 0 and raw < prev and (prev - raw) > 500 %}
+                {{ raw | round(3) }}
+              {% else %}
+                {{ [raw, prev] | max | round(3) }}
+              {% endif %}
             {% endif %}
           {% endif %}
         availability: true
@@ -246,6 +254,10 @@ template:
   - trigger:
       - platform: state
         entity_id: sensor.solarman_total_energy_sold
+      - platform: homeassistant
+        event: start
+      - platform: event
+        event_type: event_template_reloaded
     sensor:
       - name: "Solarman Total Energy Sold Safe"
         unique_id: solarman_total_energy_sold_safe
@@ -264,7 +276,11 @@ template:
               {{ raw | round(3) }}
             {% else %}
               {% set prev = prev_s | float(0) %}
-              {{ [raw, prev] | max | round(3) }}
+              {% if raw > 0 and raw < prev and (prev - raw) > 500 %}
+                {{ raw | round(3) }}
+              {% else %}
+                {{ [raw, prev] | max | round(3) }}
+              {% endif %}
             {% endif %}
           {% endif %}
         availability: true

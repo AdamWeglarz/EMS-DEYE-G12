@@ -686,6 +686,9 @@ automation:
     trigger:
       - platform: time_pattern
         minutes: "/15"
+      # Domknij slot 23:45-24:00 przed resetem i raportem dziennym o 23:59.
+      - platform: time
+        at: "23:58:30"
     action:
       - variables:
           bought_now: "{{ states('sensor.solarman_total_energy_bought_safe') | float(0) }}"
