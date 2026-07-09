@@ -79,7 +79,7 @@ recorder:
 - **Eksport PV (oddawanie nadwyżki fotowoltaiki) 06:00–13:00** – 4 tryby od PV-only do pełnego rozładowania baterii
 - **Eksport wieczorny z baterii 15:00–22:00** – sprzedaż przy korzystnych cenach RCE
 - **Blokada nocna (22:00)** – planowanie na całą noc i ochrona przed zbyt głębokim rozładowaniem
-- **Tryb awaryjny LOWPV** – wymuszenie ładowania do 100% przy słabej prognozie PV (oddzielne progi dla RANO i POŁUDNIE)
+- **Tryb LOWPV** – progi niskiej prognozy PV bez wymuszania 100%; popołudniu utrzymuje wyższy SOC na koniec okna
 - **Bilansowanie godzinowe** – przestrzeganie zasad rozliczenia prosumenckiego (nie oddawaj energii, którą odkupisz tej samej godziny)
 - **Korekta SOC na podstawie pogody** – falownik rano (05:29) koryguje minimalny SOC zależnie od zachmurzenia
 - **Obsługa kalendarzy** – automatyczna korekta planowanego zużycia podczas urlopu i sprzątania
@@ -133,7 +133,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 2. Pobiera prognozę PV z Solcast (`detailedForecast`, sloty 30-min, 06:00–13:00 dziś).
 3. Symuluje slot po slocie (0..47): aktualna energia w baterii − zużycie + PV.
 4. Wyznacza minimalny `limit_soc` potrzebny do dotarcia do 13:00 bez zejścia poniżej `magazyn_soc_floor_percent` (20%).
-5. Jeśli prognoza PV < `var.magazyn_lowpv_threshold_rano_kwh` (domyślnie 8 kWh) → **tryb LOWPV**: ładuje do 100%.
+5. Jeśli prognoza PV < `var.magazyn_lowpv_threshold_rano_kwh` (domyślnie 8 kWh), próg jest raportowany diagnostycznie; cel nadal wynika z planu na 13:00.
 6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_poranek` = ON → **ETAP 2**: doładowuje pod planowany eksport poranny (patrz niżej).
 7. Robi pre-check popołudnia: szacuje wymagane `E15` dla okna 15–22, odejmuje saldo 13–15 oraz `var.magazyn_ladowanie_13_15_capacity_kwh`; jeśli okno 13–15 nie wystarczy, podnosi poranny cel, ale tylko do limitu bez spillu PV.
 
@@ -161,7 +161,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 2. Pobiera prognozę PV 13–22/23 (`detailedForecast`, sloty 30-min; odejmuje już wyprodukowaną energię).
 3. Symuluje SOC slot po slocie do 22:00, a przy aktywnym planie eksportu po 22 do 23:00.
 4. Wyznacza limit doładowania potrzebny do pokrycia zużycia wieczornego z zapasem.
-5. Jeśli prognoza skoryg. < `var.magazyn_lowpv_threshold_popoludnie_kwh` (domyślnie 8 kWh) **i** nie wystarcza na full + konsumpcję do 15:00 → **tryb LOWPV**: ładuje do 100%.
+5. Jeśli prognoza skoryg. < `var.magazyn_lowpv_threshold_popoludnie_kwh` (domyślnie 8 kWh), planner wymaga min. `var.magazyn_soc_min_wieczor_lowpv_percent` na koniec okna 22:00/23:00; w dniu LOWPV ustawia ten floor na 30%.
 6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_wieczor` = ON → **ETAP 2**: doładowuje pod planowany eksport wieczorny (patrz niżej).
    - Sloty eksportowe są rozpoznawane po kandydatach cenowych, a nie po aktualnie dostępnej nadwyżce baterii. Dzięki temu niski SOC o 13:00 nie daje fałszywego `NO_SLOTS`, tylko uruchamia doładowanie pod drogie sloty 15–22.
    - Jeśli slot 22:00–23:00 spełnia próg ceny, zapisywana jest flaga `var.magazyn_plan_export_po_22`, plan ładowania chroni energię domu do 23:00, a nocna blokada przesuwa się z 22:00 na 23:00.
@@ -200,7 +200,7 @@ Dodatkowy floor: `var.magazyn_soc_min_rano_percent` – żaden tryb BAT nie zejd
 
 Analogiczna logika jak eksport poranny, ale dla okna 15–22. Warunek cenowy: cena RCE aktualnego slotu > próg minimalnego zysku.
 
-Automatyzacja POŁUDNIE (13–15) co uruchomienie oblicza **najlepsze sloty cenowe** na wieczór (15–22h) i ewentualnie planuje dodatkowe ładowanie z sieci (`export_topup`), żeby mieć wystarczający SOC do sprzedania zaplanowanej energii. Nawet w trybie LOWPV (cel = 100%) sloty są kalkulowane i wyświetlane w notyfikacji – bateria jest już pełna, więc `export_topup` jest pomijany.
+Automatyzacja POŁUDNIE (13–15) co uruchomienie oblicza **najlepsze sloty cenowe** na wieczór (15–22h) i ewentualnie planuje dodatkowe ładowanie z sieci (`export_topup`), żeby mieć wystarczający SOC do sprzedania zaplanowanej energii. W trybie LOWPV sloty nadal są kalkulowane, ale zamiast celu 100% planner pilnuje min. 30% SOC na koniec okna 22/23.
 
 SOC stop eksportu wieczornego: `var.magazyn_soc_stop_export_wieczor` (domyślnie 20%).
 W trybie **FULL** próg uwzględnia prognozowane zużycie do końca bieżącej godziny
@@ -242,7 +242,7 @@ Włączana osobno dla każdego okna:
 **Zabezpieczenia:**
 - Nie przekracza pojemności baterii (`max_ene_u`)
 - Respektuje `sensor.aktualny_limit_dzienny` — limit dobowy oddanej energii
-- W trybie LOWPV (cel = 100%) topup jest pomijany — bateria jest już pełna, sloty są liczone wyłącznie informacyjnie
+- W trybie LOWPV topup nie jest pomijany automatycznie; planner łączy cel eksportowy z wymogiem min. 30% SOC na koniec okna 22/23
 - `was_discharging` guard w domykaczu — topup nie koliduje z domykaczem godzinowym
 
 ---
@@ -255,7 +255,7 @@ O 22:00, albo o 23:00 po eksporcie po 22, system planuje noc i następny poranek
 - Pobiera prognozę PV na jutro
 - Symuluje zużycie na podstawie statycznych slotów 30-min dla poranka i popołudnia
 - Wyznacza czy bieżący SOC wystarczy do 13:00 bez dołowania poniżej `magazyn_soc_blokada_noc_min_percent`
-- Liczy preview celu porannego 02:00 tą samą logiką co planner RANO: target 13:00, floor rano, LOWPV, urlop, pre-check popołudnia i poranny export topup
+- Liczy preview celu porannego 02:00 tą samą logiką co planner RANO: target 13:00, floor rano, urlop, pre-check popołudnia i poranny export topup
 - Jeśli nie – zatrzymuje eksport i przełącza falownik w tryb normalny (Zero Export To CT)
 
 **Blokada rozładowania nocnego:** jeśli preview planera RANO zakłada wyższy cel niż klasyczny nocny booking, limit hold-SOC bierze ten cel pod uwagę, ale nigdy nie ustawia limitu powyżej aktualnego SOC. Dzięki temu noc nie pozwala zjechać poniżej energii, którą planner 02:00 i tak chciałby potem odtwarzać z sieci.
@@ -278,10 +278,10 @@ System dysponuje dwoma niezależnymi progami LOWPV:
 
 | Automatyzacja | Parametr | Domyślnie | Warunek |
 |---|---|---|---|
-| RANO (02–06) | `var.magazyn_lowpv_threshold_rano_kwh` | 8 kWh | Prognoza PV dziś (całodziennie) < próg → ładuj do 100% |
-| POŁUDNIE (13–15) | `var.magazyn_lowpv_threshold_popoludnie_kwh` | 8 kWh | Prognoza PV (skoryg. pozostało) < próg **i** nie wystarcza na full + konsumpcję do 15:00 → ładuj do 100% |
+| RANO (02–06) | `var.magazyn_lowpv_threshold_rano_kwh` | 8 kWh | Prognoza PV dziś (całodziennie) < próg → tylko diagnostyka; cel wynika z `var.cel_naladowania_o_13` |
+| POŁUDNIE (13–15) | `var.magazyn_lowpv_threshold_popoludnie_kwh` | 8 kWh | Prognoza PV (skoryg. pozostało) < próg → planuj min. 30% na koniec okna 22/23 |
 
-W trybie LOWPV cel SOC = 100%; nadal kalkulowane są wieczorne sloty eksportu (do celów informacyjnych i przyszłego planowania), ale dodatkowe ładowanie pod eksport (`export_topup`) jest pomijane — bateria jest już pełna.
+LOWPV nie wymusza już ładowania do 100%. Rano próg jest sygnałem diagnostycznym, a po południu dodaje warunek końcowego SOC: na koniec okna eksportu (`22:00` albo `23:00`, jeśli zaplanowano eksport po 22) magazyn ma mieć min. `30%`. Wartość jest trzymana w `var.magazyn_soc_min_wieczor_lowpv_percent` i resetowana nocnym bookingiem do bazowych `25%`.
 
 ---
 
@@ -362,10 +362,11 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 | `magazyn_soc_floor_percent` | 20% | Techniczne minimum SOC (korygowane przez pogodę) |
 | `cel_naladowania_o_13` | 50% | Docelowy SOC o 13:00 |
 | `magazyn_ladowanie_13_15_capacity_kwh` | 14 kWh | Zakładana energia możliwa do doładowania w oknie 13:00-15:00; konserwatywny limit do planowania, bo końcówka ładowania do 100% zwalnia |
-| `magazyn_lowpv_threshold_rano_kwh` | 8 kWh | LOWPV próg RANO – poniżej: ładuj do 100% |
-| `magazyn_lowpv_threshold_popoludnie_kwh` | 8 kWh | LOWPV próg POŁUDNIE – poniżej: ładuj do 100% |
+| `magazyn_lowpv_threshold_rano_kwh` | 8 kWh | LOWPV próg RANO – diagnostyka, bez wymuszania 100% |
+| `magazyn_lowpv_threshold_popoludnie_kwh` | 8 kWh | LOWPV próg POŁUDNIE – poniżej planuj wyższy SOC na koniec okna |
 | `magazyn_min_zysk_sprzedaz_pln_kwh` | 0,38 PLN/kWh | Minimalny spread RCE do decyzji o sprzedaży |
 | `magazyn_soc_min_rano_percent` | 25% | Twardy floor SOC w oknie 06–13 (blokuje eksport BAT) |
+| `magazyn_soc_min_wieczor_lowpv_percent` | 25% | Floor SOC na koniec okna 22/23; w dniu LOWPV popołudnie podnosi do 30%, nocny booking resetuje do 25% |
 | `magazyn_soc_stop_export_wieczor` | 20% | Twardy floor SOC eksportu wieczornego |
 | `magazyn_soc_blokada_noc_min_percent` | 21% | Min SOC przy blokadzie nocnej (22:00) |
 | `magazyn_soc_spill_bat_floor_percent` | 30% | Min SOC przy trybie BAT spill |
@@ -450,7 +451,8 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ### 2026-07-07
 - **EMS1: eksport wraca do podsumowania finansowego 23:59** (`packages/solarmansafe.yaml`, `packages/finanse_pv.yaml`): sensory `Solarman Total Energy Bought/Sold Safe` potrafią teraz wrócić do realnego totalizera po dużym historycznym przekłamaniu w górę, zamiast blokować się na zawyżonym `max(raw, prev)`. Akumulacja finansów dostała dodatkowy trigger `23:58:30`, żeby przed resetem 23:59 domknąć eksport/import z ostatniego slotu dnia.
 - **EMS1: strategiczny hold SOC nie kasuje nocnej blokady** (`packages/magazyn_nowyeksport.yaml`): automatyzacja `Magazyn: Utrzymaj SOC pod eksport strategiczny` wyłącza teraz wspólny `input_boolean.battery_charge_from_grid` tylko wtedy, gdy strategiczny hold jest aktywny. Gdy `var.magazyn_strategiczny_hold_soc.enabled` jest false, nie dotyka trybu ładowania/hold SOC używanego przez nocną blokadę i poranny planner.
-- **EMS1: nocna blokada używa preview planera 02:00** (`packages/magazyn_nowyeksport.yaml`): booking nocny nadal liczy `booked_soc`, ale przed ustawieniem hold-SOC wylicza `rano_preview_soc` i `rano_preview_charge` spójnie z logiką `Magazyn: RANO (02-06) cel na 13:00` (target 13:00, floor rano, LOWPV, urlop, pre-check popołudnia, poranny export topup). Limit falownika bierze wyższy z tych celów, nadal obcięty do aktualnego SOC, żeby blokować niepotrzebne nocne rozładowanie bez wymuszania natychmiastowego ładowania.
+- **EMS1: nocna blokada używa preview planera 02:00** (`packages/magazyn_nowyeksport.yaml`): booking nocny nadal liczy `booked_soc`, ale przed ustawieniem hold-SOC wylicza `rano_preview_soc` i `rano_preview_charge` spójnie z logiką `Magazyn: RANO (02-06) cel na 13:00` (target 13:00, floor rano, urlop, pre-check popołudnia, poranny export topup). Limit falownika bierze wyższy z tych celów, nadal obcięty do aktualnego SOC, żeby blokować niepotrzebne nocne rozładowanie bez wymuszania natychmiastowego ładowania.
+- **EMS1: LOWPV bez ładowania do 100%** (`packages/automations_magazyn.yaml`, `packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`): usunięto poranne i popołudniowe wymuszanie celu 100% przy niskiej prognozie PV. Rano próg LOWPV jest diagnostyczny, a po południu niski forecast planuje min. 30% SOC na koniec okna 22/23 przez `var.magazyn_soc_min_wieczor_lowpv_percent`, resetowany nocnym bookingiem do 25%.
 
 ### 2026-07-05
 - **EMS1 Dashboard: jedna grupa dziennego bilansu energii** (`packages/ems1_dashboard.yaml`, `dashboards/ems1_shadow.yaml`): dodano sensory Load/Grid/PV/Magazyn, licznik energii pokrytej bez importu oraz live liczniki oszczędności vs G12/G11 oparte o te same akumulatory, które są używane w nocnym podsumowaniu finansów.
@@ -467,7 +469,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ### 2026-06-28
 - **EMS1: poranny pre-check ładowania pod popołudnie** (`packages/automations_magazyn.yaml`): poranny plan symuluje teraz 13–15 i 15–22, uwzględnia zakładane ładowanie 13–15 (`var.magazyn_ladowanie_13_15_capacity_kwh`) i podbija poranny target, jeśli samo okno 13–15 nie wystarczy do wymaganego `E15`; dodatkowe ładowanie jest ograniczone przez limit bez spillu PV.
 - **EMS1: parametr pojemności ładowania 13-15** (`packages/zmienne_zarzadzanie_pv.yaml`): dodano `var.magazyn_ladowanie_13_15_capacity_kwh` z domyślną wartością 14 kWh jako konserwatywne założenie do przyszłej symulacji porannej.
-- **EMS1: poranne ładowanie 02:00-06:00** (`packages/automations_magazyn.yaml`): start planowania/ładowania przesunięto z 03:00 na 02:00 przez dodanie triggerów 02:00 i 02:30. Stop pozostaje o 06:00, żeby magazyn miał cztery godziny na dobicie do 100% w trybie LOWPV lub przy wysokim celu.
+- **EMS1: poranne ładowanie 02:00-06:00** (`packages/automations_magazyn.yaml`): start planowania/ładowania przesunięto z 03:00 na 02:00 przez dodanie triggerów 02:00 i 02:30. Stop pozostaje o 06:00, żeby magazyn miał cztery godziny na dobicie przy wysokim celu.
 - **Finanse PV: koszt importu przy szybkim ładowaniu** (`packages/finanse_pv.yaml`): limit anty-spike dla delt importu/eksportu podniesiono z 3 do 10 kWh/15 min. Poprzedni próg odrzucał realne sloty ładowania magazynu powyżej 12 kW i zaniżał koszt importu poniżej minimalnej ceny G12 0.65 PLN/kWh.
 
 ### 2026-07-07
@@ -509,9 +511,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
   - Na tym etapie tracker tylko liczy koszt i diagnostykę; decyzje eksportowe EMS1 nie używają go jeszcze do wyboru godzin.
 
 ### 2026-06-01
-- **EMS1: spójny cel LOWPV po południu** (`packages/automations_magazyn.yaml`):
-  - Tryb LOWPV po ustawieniu celu 100% przelicza teraz także `grid_add_u` na energię potrzebną do pełnego magazynu.
-  - Podsumowanie, cel kWh watchdoga i limit SOC falownika nie rozjeżdżają się już na układ `Cel finalny: 100%`, ale `Doładować finalnie: 63%`.
+- **EMS1: historycznie spójny cel LOWPV po południu** (`packages/automations_magazyn.yaml`):
+  - Dawny tryb LOWPV do 100% przeliczał także `grid_add_u` na energię potrzebną do pełnego magazynu.
+  - Ta ścieżka została później zastąpiona planowaniem min. 30% SOC na koniec okna 22/23.
 
 ### 2026-05-31
 - **EMS1: popołudniowe doładowanie pod eksport przy niskim SOC** (`packages/automations_magazyn.yaml`):

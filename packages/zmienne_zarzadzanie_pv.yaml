@@ -108,6 +108,13 @@ var:
     icon: "mdi:battery-alert-variant"
     initial_value: 25
 
+  magazyn_soc_min_wieczor_lowpv_percent:
+    unique_id: "magazyn_soc_min_wieczor_lowpv_percent"
+    friendly_name: "Magazyn: Min SOC wieczorem przy LOWPV (%)"
+    icon: "mdi:battery-alert-variant-outline"
+    initial_value: 25
+    unit_of_measurement: "%"
+
   # 2) Zużycie / SQL / safety
   magazyn_konsumpcja_multiplier:
     unique_id: "magazyn_konsumpcja_multiplier"
@@ -140,14 +147,14 @@ var:
   # 3) PV / LOWPV / korekta prognozy (k)
   magazyn_lowpv_threshold_rano_kwh:
     unique_id: "magazyn_lowpv_threshold_rano_kwh"
-    friendly_name: "Magazyn: LOWPV próg RANO (kWh) – wymuś FULL"
+    friendly_name: "Magazyn: LOWPV próg RANO (kWh)"
     icon: "mdi:weather-cloudy"
     initial_value: 8.0
     restore: true
 
   magazyn_lowpv_threshold_popoludnie_kwh:
     unique_id: "magazyn_lowpv_threshold_popoludnie_kwh"
-    friendly_name: "Magazyn: LOWPV próg POPOŁUDNIE (kWh) – wymuś FULL"
+    friendly_name: "Magazyn: LOWPV próg POPOŁUDNIE (kWh)"
     icon: "mdi:weather-cloudy"
     initial_value: 8.0
     restore: true

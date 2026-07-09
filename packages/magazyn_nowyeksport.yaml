@@ -2444,11 +2444,16 @@ automation:
           {{ forecast_data | length > 0 and ((h == 22 and not po22) or (h == 23 and po22)) }}
   
     action:
-      # Floor ustawiany o 05:29 wg pogody ma obowiązywać tylko bieżący poranek.
+      # Floory dzienne mają obowiązywać tylko bieżący dzień.
       # Nocny booking następnego dnia zawsze startuje od bazowych 25%.
       - service: var.set
         data:
           entity_id: var.magazyn_soc_min_rano_percent
+          value: 25
+
+      - service: var.set
+        data:
+          entity_id: var.magazyn_soc_min_wieczor_lowpv_percent
           value: 25
 
       - variables:
@@ -3014,14 +3019,7 @@ automation:
             {% if rano_cel > 100 %}{% set rano_cel = 100 %}{% endif %}
             {% set rano_powod = 'TARGET13' %}
 
-            {% set pv_tomorrow_kwh = states('sensor.solcast_pv_forecast_prognoza_na_jutro') | float(0) %}
-            {% set lowpv_threshold_rano = states('var.magazyn_lowpv_threshold_rano_kwh') | float(8.0) %}
-            {% set force_full = (pv_tomorrow_kwh > 0 and pv_tomorrow_kwh < lowpv_threshold_rano) %}
-            {% if force_full and not urlop_any %}
-              {% set rano_cel = 100 %}
-              {% set rano_czy_ladowac = true %}
-              {% set rano_powod = 'LOWPV' %}
-            {% endif %}
+            {# LOWPV rano nie wymusza już 100%; preview trzyma się planu 02:00. #}
 
             {% if urlop_any %}
               {% set urlop_target_u = E6_plan + 1.0 %}

@@ -951,7 +951,7 @@ automation:
     i unikać spillu w całym oknie produkcji PV.
     Dodatkowy floor: var.magazyn_soc_min_rano_percent — SOC nie spadnie poniżej
     tego progu w oknie 06:00–11:00.
-    LOWPV: jeśli prognoza PV na dziś < 8 kWh -> ładuj FULL (100%).
+    LOWPV: próg pozostaje diagnostyczny; cel rano wynika z planu na 13:00.
     Dodatkowo: opcjonalne ekstra doładowanie pod poranny eksport 06:00–11:00,
     ale z poszanowaniem celu SOC na 13:00.
     Poranny pre-check popołudnia: jeśli założone ładowanie 13:00–15:00
@@ -1443,14 +1443,9 @@ automation:
             {% set powod = 'TARGET13_CAPPED_NO_SPILL' %}
           {% endif %}
 
-          {# ===== LOWPV ===== #}
+          {# ===== LOWPV diagnostycznie: nie wymusza już ładowania do 100%. ===== #}
           {% set lowpv_threshold_rano = states('var.magazyn_lowpv_threshold_rano_kwh') | float(8.0) %}
-          {% set force_full = (pv_today_kwh > 0 and pv_today_kwh < lowpv_threshold_rano) %}
-          {% if force_full and not urlop_any %}
-            {% set cel = 100 %}
-            {% set czy_ladowac = true %}
-            {% set powod = 'LOWPV' %}
-          {% endif %}
+          {% set force_full = (pv_today_kwh < lowpv_threshold_rano) %}
 
           {# ===== URLOP: +1 kWh ponad wyliczony plan, bez full, z capem o E6_safe_max =====
              Bufor urlopowy ma byc staly wzgledem planu E6_plan. Nie dodawaj 1 kWh
@@ -1809,7 +1804,7 @@ automation:
           Spill PV (od 06:00): {{ wyniki_pakiet.split('###')[6] }} kWh
 
           {% if wyniki_pakiet.split('###')[10] == 'YES' %}
-          ⚠️ TRYB AWARYJNY: prognoza PV dziś < {{ states('var.magazyn_lowpv_threshold_rano_kwh') | float(8.0) }}kWh → wymuszam ładowanie do 100%
+          ℹ️ LOWPV: prognoza PV dziś < {{ states('var.magazyn_lowpv_threshold_rano_kwh') | float(8.0) }}kWh; cel pozostaje liczony z planu na 13:00
           {% endif %}
 
           Raport:
@@ -1853,10 +1848,8 @@ automation:
   description: >
     POPOŁUDNIE: Dobiera minimalne doładowanie z sieci, aby w oknie 13–21 nie spaść
     poniżej 25% SOC, czyli dotrwać do 22:00.
-    LOWPV SMART: jeśli pozostała prognoza PV < 8kWh, to ładuj do 100% tylko wtedy,
-    gdy skorygowany forecast PV nie wystarczy na:
-    1) doładowanie baterii do 100%
-    2) planowaną konsumpcję od teraz do 15:00.
+    LOWPV: jeśli pozostała prognoza PV < próg, planuj na koniec okna 22/23
+    min. SOC z var.magazyn_soc_min_wieczor_lowpv_percent (30% w dniu LOWPV).
     Dodatkowo:
     - opcjonalne extra doładowanie pod wieczorny eksport
     - watchdog stop ładowania z sieci na podstawie dodatniego PV netto do końca dnia * 0.9
@@ -2189,8 +2182,8 @@ automation:
 
           {# ===== TRYB NISKIE PV ===== #}
           {% set lowpv_threshold_popoludnie = states('var.magazyn_lowpv_threshold_popoludnie_kwh') | float(8.0) %}
-          {% set pv_low_base = (solcast_pozostalo > 0 and solcast_pozostalo < lowpv_threshold_popoludnie) %}
-          {% set pv_low = (pv_low_base and not pv_wystarczy_na_full_i_pre15) %}
+          {% set pv_low_base = (solcast_pozostalo < lowpv_threshold_popoludnie) %}
+          {% set pv_low = pv_low_base %}
 
           {# ===== BLOKADA SPILL ===== #}
           {% set blokada_spill = (ns.spill > 0.1) %}
@@ -2227,15 +2220,7 @@ automation:
           {% set grid_add_u = grid_add_base_u %}
           {% set cel = cel_base %}
 
-          {# ===== LOWPV SMART ===== #}
-          {% if pv_low and not blokada_spill and not urlop_any %}
-            {% set cel = 100 %}
-            {% set grid_add_u = max_ene_u - E15_base %}
-            {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
-            {% if grid_add_u > max_ene_u %}{% set grid_add_u = max_ene_u %}{% endif %}
-            {% set czy_ladowac = true %}
-            {% set powod = 'LOWPV' %}
-          {% endif %}
+          {# LOWPV nie wymusza już 100%; końcowy floor 22/23 jest liczony po planie eksportu. #}
 
           {# ===== URLOP: +1 kWh ponad wyliczenie, bez full, tylko gdy brak blokady spill ===== #}
           {% if urlop_any and not blokada_spill %}
@@ -2515,6 +2500,50 @@ automation:
             {% endif %}
           {% endif %}
 
+          {# ===== LOWPV: wymagany SOC na koniec okna 22/23 ===== #}
+          {% set lowpv_evening_floor_pct = 30 if pv_low else (states('var.magazyn_soc_min_wieczor_lowpv_percent') | float(25)) %}
+          {% if lowpv_evening_floor_pct < 25 %}{% set lowpv_evening_floor_pct = 25 %}{% endif %}
+          {% if lowpv_evening_floor_pct > 100 %}{% set lowpv_evening_floor_pct = 100 %}{% endif %}
+          {% set lowpv_end_extra_u = 0.0 %}
+          {% if pv_low and not blokada_spill %}
+            {% set nsEnd = namespace(S=0.0) %}
+            {% for s in range(30, export_end_hour_evening * 2) %}
+              {% set h = s // 2 %}
+              {% set m = (s % 2) * 30 %}
+              {% set hk = dzis.strftime('%Y-%m-%d') ~ ' ' ~ '%02d:%02d'|format(h, m) %}
+              {% set is_urlop_h = hk in urlop_hours %}
+              {% set is_sprzatanie_h = hk in sprzatanie_hours %}
+              {% set z_s = (dict_z.get(s, cons_default_slot)) * sprzatanie_mult if is_sprzatanie_h else (urlop_kwh_slot if is_urlop_h else (dict_z.get(s, cons_default_slot)) * cons_mult) %}
+              {% set pv_s = namespace(v=0.0) %}
+              {% for item in forecast_data %}
+                {% set ts = as_local(as_datetime(item.period_start or item.datetime)) %}
+                {% if ts.date() == dzis and ts.hour == h and ts.minute == m %}
+                  {% set pv_s.v = (item.get('pv_estimate') or item.get('pv_forecast') or 0) | float / 2 %}
+                {% endif %}
+              {% endfor %}
+              {% set nsEnd.S = nsEnd.S + ((pv_s.v * k) - z_s) %}
+            {% endfor %}
+            {% set lowpv_end_target_u = ((lowpv_evening_floor_pct / 100) * pojemnosc_kwh) - prog_min_kwh %}
+            {% if lowpv_end_target_u < 0 %}{% set lowpv_end_target_u = 0 %}{% endif %}
+            {% if lowpv_end_target_u > max_ene_u %}{% set lowpv_end_target_u = max_ene_u %}{% endif %}
+            {% set E_after_plan_end_u = E15_base + grid_add_u + nsEnd.S %}
+            {% set lowpv_end_extra_u = lowpv_end_target_u - E_after_plan_end_u %}
+            {% if lowpv_end_extra_u < 0 %}{% set lowpv_end_extra_u = 0 %}{% endif %}
+            {% set lowpv_end_extra_u = [lowpv_end_extra_u, (max_ene_u - E15_base - grid_add_u)] | min %}
+            {% if lowpv_end_extra_u < 0 %}{% set lowpv_end_extra_u = 0 %}{% endif %}
+            {% if lowpv_end_extra_u > 0.01 %}
+              {% set grid_add_u = grid_add_u + lowpv_end_extra_u %}
+              {% set E_start_u_new = E15_base + grid_add_u %}
+              {% set cel = (((E_start_u_new + prog_min_kwh) / pojemnosc_kwh) * 100) | int %}
+              {% if cel < 25 %}{% set cel = 25 %}{% endif %}
+              {% if cel > 100 %}{% set cel = 100 %}{% endif %}
+              {% set czy_ladowac = true %}
+              {% set powod = powod ~ '+LOWPV_END30' %}
+            {% else %}
+              {% set powod = powod ~ '+LOWPV_END_OK' %}
+            {% endif %}
+          {% endif %}
+
           {# ===== Finalizacja celów i ilości po extra-topup ===== #}
           {% set cel_final = cel %}
           {% set grid_add_total_u = grid_add_u %}
@@ -2597,6 +2626,12 @@ automation:
             " | limit:" ~ limit_dzienny|round(2) ~ "kWh"
           %}
           {% set ns.raport = ns.raport ~
+            "\nLOWPV_END | lowpv:" ~ ('YES' if pv_low else 'NO') ~
+            " | floor:" ~ lowpv_evening_floor_pct|round(0) ~ "%" ~
+            " | extra:" ~ lowpv_end_extra_u|round(2) ~ "kWh" ~
+            " | end:" ~ export_end_hour_evening ~ ":00"
+          %}
+          {% set ns.raport = ns.raport ~
             "\nSTOP_GRID | soc_stop:" ~ soc_stop_grid ~ "%" ~
             " | target_soc:" ~ cel_final ~ "%" ~
             " | E_target:" ~ E_target_u|round(2) ~ "kWh" ~
@@ -2607,7 +2642,7 @@ automation:
           {% set ns.raport = ns.raport ~ ns_stop.lines %}
 
           {% set export_po22_planned = export_po22_enabled and export_po22_period | length > 0 and export_po22_period in export_plan_lines %}
-          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}###{{ 'YES' if export_po22_planned else 'NO' }}###{{ export_po22_period }}###{{ export_po22_price|round(1) }}###{{ 23 if export_po22_planned else 22 }}
+          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}###{{ 'YES' if export_po22_planned else 'NO' }}###{{ export_po22_period }}###{{ export_po22_price|round(1) }}###{{ 23 if export_po22_planned else 22 }}###{{ 'YES' if pv_low else 'NO' }}###{{ lowpv_evening_floor_pct|round(0) }}###{{ lowpv_end_extra_u|round(2) }}
 
     - service: var.set
       data:
@@ -2625,6 +2660,18 @@ automation:
           export_required_total_kwh: "{{ wyniki_pakiet.split('###')[27] | float(0) }}"
           target_soc: "{{ wyniki_pakiet.split('###')[1] | float(0) }}"
           grid_add_export_kwh: "{{ wyniki_pakiet.split('###')[4] | float(0) }}"
+
+    - service: var.set
+      data:
+        entity_id: var.magazyn_soc_min_wieczor_lowpv_percent
+        value: "{{ wyniki_pakiet.split('###')[44] | float(25) }}"
+        attributes:
+          last_update: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          lowpv: "{{ wyniki_pakiet.split('###')[43] == 'YES' }}"
+          threshold_kwh: "{{ states('var.magazyn_lowpv_threshold_popoludnie_kwh') | float(8.0) }}"
+          pv_remaining_corrected_kwh: "{{ wyniki_pakiet.split('###')[16] | float(0) }}"
+          export_end_hour: "{{ wyniki_pakiet.split('###')[42] | int(22) }}"
+          lowpv_extra_kwh: "{{ wyniki_pakiet.split('###')[45] | float(0) }}"
 
     - service: var.set
       data:
@@ -2825,7 +2872,10 @@ automation:
           - E15_required (żeby 15–22 nie spaść <25%): {{ wyniki_pakiet.split('###')[8] }} kWh
           - E_min w oknie 15-22: {{ wyniki_pakiet.split('###')[20] }} kWh
 
-          LOWPV SMART:
+          LOWPV:
+          - Aktywne: {{ wyniki_pakiet.split('###')[43] }}
+          - Floor na koniec okna: {{ wyniki_pakiet.split('###')[44] }}%
+          - Extra do flooru LOWPV: {{ wyniki_pakiet.split('###')[45] }} kWh
           - Konsumpcja od teraz do 15:00: {{ wyniki_pakiet.split('###')[22] }} kWh
           - Brak do 100%: {{ wyniki_pakiet.split('###')[23] }} kWh
           - Forecast skorygowany wystarczy na full + konsumpcję do 15:00: {{ wyniki_pakiet.split('###')[24] }}
@@ -2867,8 +2917,8 @@ automation:
 
           {% if wyniki_pakiet.split('###')[21] == 'YES' %}
           🚫 BLOKADA: Wykryto nadmiar PV (spill > 0) → ładowanie z sieci zablokowane
-          {% elif wyniki_pakiet.split('###')[17] == 'LOWPV' %}
-          ⚠️ TRYB AWARYJNY LOWPV: forecast skorygowany < {{ states('var.magazyn_lowpv_threshold_popoludnie_kwh') | float(8.0) }}kWh i nie wystarcza na full + konsumpcję do 15:00 → wymuszam ładowanie do 100%
+          {% elif wyniki_pakiet.split('###')[43] == 'YES' %}
+          ℹ️ LOWPV: forecast skorygowany < {{ states('var.magazyn_lowpv_threshold_popoludnie_kwh') | float(8.0) }}kWh → planuję min. {{ wyniki_pakiet.split('###')[44] }}% na koniec okna {{ wyniki_pakiet.split('###')[42] }}:00
           {% elif wyniki_pakiet.split('###')[17] == 'BATTERY_OK' %}
           ✅ Bateria wystarczy do 22:00 bez doładowania
           {% elif wyniki_pakiet.split('###')[17] == 'NORMAL' or '+EXPORT' in wyniki_pakiet.split('###')[17] %}
