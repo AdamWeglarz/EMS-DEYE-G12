@@ -251,13 +251,14 @@ Włączana osobno dla każdego okna:
 
 **Plik:** `magazyn_nowyeksport.yaml`
 
-O 22:00 system planuje całą noc JUTRO (22:00 → 13:00 następnego dnia):
-- Pobiera prognozę PV na jutro (06:00–13:00)
-- Symuluje zużycie na podstawie SQL dla godzin 22–24 i 0–13
+O 22:00, albo o 23:00 po eksporcie po 22, system planuje noc i następny poranek:
+- Pobiera prognozę PV na jutro
+- Symuluje zużycie na podstawie statycznych slotów 30-min dla poranka i popołudnia
 - Wyznacza czy bieżący SOC wystarczy do 13:00 bez dołowania poniżej `magazyn_soc_blokada_noc_min_percent`
+- Liczy preview celu porannego 02:00 tą samą logiką co planner RANO: target 13:00, floor rano, LOWPV, urlop, pre-check popołudnia i poranny export topup
 - Jeśli nie – zatrzymuje eksport i przełącza falownik w tryb normalny (Zero Export To CT)
 
-**Blokada rozładowania nocnego:** jeśli plan RANO zakłada ładowanie baterii z sieci (tania strefa G12 22:00–06:00), system pilnuje żeby baterii **nie rozładowywać w nocy** — rozładowanie a potem ponowne naładowanie z sieci to strata na sprawności round-trip (~7%). Plan nocny rezerwuje energię potrzebną do dotarcia do rana i blokuje eksport poniżej tego poziomu (`magazyn_soc_blokada_noc_min_percent`).
+**Blokada rozładowania nocnego:** jeśli preview planera RANO zakłada wyższy cel niż klasyczny nocny booking, limit hold-SOC bierze ten cel pod uwagę, ale nigdy nie ustawia limitu powyżej aktualnego SOC. Dzięki temu noc nie pozwala zjechać poniżej energii, którą planner 02:00 i tak chciałby potem odtwarzać z sieci.
 
 ---
 
@@ -449,6 +450,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ### 2026-07-07
 - **EMS1: eksport wraca do podsumowania finansowego 23:59** (`packages/solarmansafe.yaml`, `packages/finanse_pv.yaml`): sensory `Solarman Total Energy Bought/Sold Safe` potrafią teraz wrócić do realnego totalizera po dużym historycznym przekłamaniu w górę, zamiast blokować się na zawyżonym `max(raw, prev)`. Akumulacja finansów dostała dodatkowy trigger `23:58:30`, żeby przed resetem 23:59 domknąć eksport/import z ostatniego slotu dnia.
 - **EMS1: strategiczny hold SOC nie kasuje nocnej blokady** (`packages/magazyn_nowyeksport.yaml`): automatyzacja `Magazyn: Utrzymaj SOC pod eksport strategiczny` wyłącza teraz wspólny `input_boolean.battery_charge_from_grid` tylko wtedy, gdy strategiczny hold jest aktywny. Gdy `var.magazyn_strategiczny_hold_soc.enabled` jest false, nie dotyka trybu ładowania/hold SOC używanego przez nocną blokadę i poranny planner.
+- **EMS1: nocna blokada używa preview planera 02:00** (`packages/magazyn_nowyeksport.yaml`): booking nocny nadal liczy `booked_soc`, ale przed ustawieniem hold-SOC wylicza `rano_preview_soc` i `rano_preview_charge` spójnie z logiką `Magazyn: RANO (02-06) cel na 13:00` (target 13:00, floor rano, LOWPV, urlop, pre-check popołudnia, poranny export topup). Limit falownika bierze wyższy z tych celów, nadal obcięty do aktualnego SOC, żeby blokować niepotrzebne nocne rozładowanie bez wymuszania natychmiastowego ładowania.
 
 ### 2026-07-05
 - **EMS1 Dashboard: jedna grupa dziennego bilansu energii** (`packages/ems1_dashboard.yaml`, `dashboards/ems1_shadow.yaml`): dodano sensory Load/Grid/PV/Magazyn, licznik energii pokrytej bez importu oraz live liczniki oszczędności vs G12/G11 oparte o te same akumulatory, które są używane w nocnym podsumowaniu finansów.
