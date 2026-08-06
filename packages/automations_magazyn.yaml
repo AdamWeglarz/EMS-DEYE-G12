@@ -1126,6 +1126,12 @@ automation:
           {% set afternoon_charge_cap_u = states('var.magazyn_ladowanie_13_15_capacity_kwh') | float(14) %}
           {% if afternoon_charge_cap_u < 0 %}{% set afternoon_charge_cap_u = 0 %}{% endif %}
           {% if afternoon_charge_cap_u > max_ene_u %}{% set afternoon_charge_cap_u = max_ene_u %}{% endif %}
+          {% set afternoon_charge_soc_cap_pct = states('var.magazyn_soc_cap_ladowanie_13_15_percent') | float(95) %}
+          {% if afternoon_charge_soc_cap_pct < 25 %}{% set afternoon_charge_soc_cap_pct = 25 %}{% endif %}
+          {% if afternoon_charge_soc_cap_pct > 100 %}{% set afternoon_charge_soc_cap_pct = 100 %}{% endif %}
+          {% set afternoon_charge_soc_cap_u = ((afternoon_charge_soc_cap_pct / 100) * pojemnosc_kwh - prog_min_kwh) %}
+          {% if afternoon_charge_soc_cap_u < 0 %}{% set afternoon_charge_soc_cap_u = 0 %}{% endif %}
+          {% if afternoon_charge_cap_u > afternoon_charge_soc_cap_u %}{% set afternoon_charge_cap_u = afternoon_charge_soc_cap_u %}{% endif %}
 
           {% set afternoon_precheck_soc_cap_pct = states('var.magazyn_soc_cap_precheck_popoludnie_percent') | float(90) %}
           {% if afternoon_precheck_soc_cap_pct < 25 %}{% set afternoon_precheck_soc_cap_pct = 25 %}{% endif %}
@@ -2545,17 +2551,36 @@ automation:
           {% endif %}
 
           {# ===== Finalizacja celów i ilości po extra-topup ===== #}
-          {% set cel_final = cel %}
+          {# Zostawiamy zapas na PV: żaden składnik planu 13-15 nie może przekroczyć capu SOC. #}
+          {% set charge_soc_cap_pct = states('var.magazyn_soc_cap_ladowanie_13_15_percent') | float(95) %}
+          {% if charge_soc_cap_pct < 25 %}{% set charge_soc_cap_pct = 25 %}{% endif %}
+          {% if charge_soc_cap_pct > 100 %}{% set charge_soc_cap_pct = 100 %}{% endif %}
+          {% set charge_cap_u = ((charge_soc_cap_pct / 100) * pojemnosc_kwh) - prog_min_kwh %}
+          {% if charge_cap_u < 0 %}{% set charge_cap_u = 0 %}{% endif %}
+          {% if charge_cap_u > max_ene_u %}{% set charge_cap_u = max_ene_u %}{% endif %}
+          {% set grid_add_before_cap_u = grid_add_u %}
+          {% set grid_add_cap_available_u = charge_cap_u - E15_base %}
+          {% if grid_add_cap_available_u < 0 %}{% set grid_add_cap_available_u = 0 %}{% endif %}
+          {% if grid_add_u > grid_add_cap_available_u %}{% set grid_add_u = grid_add_cap_available_u %}{% endif %}
+          {% if grid_add_u < 0 %}{% set grid_add_u = 0 %}{% endif %}
+          {% set charge_cap_limited = grid_add_before_cap_u > (grid_add_u + 0.001) %}
+          {% if grid_add_base_u > grid_add_u %}{% set grid_add_base_u = grid_add_u %}{% endif %}
+          {% set export_extra_u = [export_extra_u, [grid_add_u - grid_add_base_u, 0] | max] | min %}
+          {% set czy_ladowac = grid_add_u > 0.01 and not blokada_spill %}
+          {% set cel_final = (((E15_base + grid_add_u + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
+          {% if cel_final < 20 %}{% set cel_final = 20 %}{% endif %}
+          {% if cel_final > charge_soc_cap_pct %}{% set cel_final = charge_soc_cap_pct | round(0) | int %}{% endif %}
+          {% if charge_cap_limited %}{% set powod = powod ~ '+CAP' ~ (charge_soc_cap_pct | round(0) | int) %}{% endif %}
           {% set grid_add_total_u = grid_add_u %}
           {% set grid_add_export_u = export_extra_u %}
 
           {% set grid_add_base_pct = (((E15_base + grid_add_base_u + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
           {% if grid_add_base_pct < 20 %}{% set grid_add_base_pct = 20 %}{% endif %}
-          {% if grid_add_base_pct > 100 %}{% set grid_add_base_pct = 100 %}{% endif %}
+          {% if grid_add_base_pct > charge_soc_cap_pct %}{% set grid_add_base_pct = charge_soc_cap_pct | round(0) | int %}{% endif %}
 
           {% set grid_add_total_pct = (((E15_base + grid_add_total_u + prog_min_kwh) / pojemnosc_kwh) * 100) | round(0) | int %}
           {% if grid_add_total_pct < 20 %}{% set grid_add_total_pct = 20 %}{% endif %}
-          {% if grid_add_total_pct > 100 %}{% set grid_add_total_pct = 100 %}{% endif %}
+          {% if grid_add_total_pct > charge_soc_cap_pct %}{% set grid_add_total_pct = charge_soc_cap_pct | round(0) | int %}{% endif %}
 
           {# ===== SOC STOP dla watchdoga: liczony PO extra topup pod oddawanie ===== #}
           {% set ns_stop = namespace(pv_credit_u=0.0, lines='') %}
@@ -2632,6 +2657,12 @@ automation:
             " | end:" ~ export_end_hour_evening ~ ":00"
           %}
           {% set ns.raport = ns.raport ~
+            "\nCHARGE_CAP_13_15 | cap:" ~ charge_soc_cap_pct|round(0) ~ "%" ~
+            " | requested:" ~ grid_add_before_cap_u|round(2) ~ "kWh" ~
+            " | planned:" ~ grid_add_total_u|round(2) ~ "kWh" ~
+            " | limited:" ~ ('YES' if charge_cap_limited else 'NO')
+          %}
+          {% set ns.raport = ns.raport ~
             "\nSTOP_GRID | soc_stop:" ~ soc_stop_grid ~ "%" ~
             " | target_soc:" ~ cel_final ~ "%" ~
             " | E_target:" ~ E_target_u|round(2) ~ "kWh" ~
@@ -2642,7 +2673,7 @@ automation:
           {% set ns.raport = ns.raport ~ ns_stop.lines %}
 
           {% set export_po22_planned = export_po22_enabled and export_po22_period | length > 0 and export_po22_period in export_plan_lines %}
-          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}###{{ 'YES' if export_po22_planned else 'NO' }}###{{ export_po22_period }}###{{ export_po22_price|round(1) }}###{{ 23 if export_po22_planned else 22 }}###{{ 'YES' if pv_low else 'NO' }}###{{ lowpv_evening_floor_pct|round(0) }}###{{ lowpv_end_extra_u|round(2) }}
+          {{ cel_base }}###{{ cel_final }}###{{ grid_add_base_u|round(2) }}###{{ grid_add_total_u|round(2) }}###{{ grid_add_export_u|round(2) }}###{{ grid_add_base_pct }}###{{ grid_add_total_pct }}###{{ E15_base|round(2) }}###{{ E15_required|round(2) }}###{{ ns.Smin_post|round(2) }}###{{ '%02d:%02d'|format(ns.s_min//2, (ns.s_min%2)*30) }}###{{ ns.spill|round(2) }}###{{ ns.raport }}###{{ 'ON' if czy_ladowac else 'OFF' }}###{{ k|round(3) }}###{{ solcast_pozostalo_org|round(2) }}###{{ solcast_pozostalo|round(2) }}###{{ powod }}###{{ E0_u|round(2) }}###{{ soc_akt|round(1) }}###{{ E_min_w_oknie|round(2) }}###{{ 'YES' if blokada_spill else 'NO' }}###{{ cons_to_15_from_now|round(2) }}###{{ batt_to_full_kwh|round(2) }}###{{ 'YES' if pv_wystarczy_na_full_i_pre15 else 'NO' }}###{{ 'ON' if export_topup_enabled else 'OFF' }}###{{ export_plan_batt_sum|round(2) }}###{{ export_required_total_u|round(2) }}###{{ limit_dzienny|round(2) }}###{{ export_reason }}###{{ export_plan_lines }}###{{ soc_stop_grid }}###{{ ns_stop.pv_credit_u|round(2) }}###{{ pv_credit_effective_u|round(2) }}###{{ E_target_u|round(2) }}###{{ E_stop_u|round(2) }}###{{ pojemnosc_kwh|round(2) }}###{{ prog_min_kwh|round(2) }}###{{ max_ene_u|round(2) }}###{{ 'YES' if export_po22_planned else 'NO' }}###{{ export_po22_period }}###{{ export_po22_price|round(1) }}###{{ 23 if export_po22_planned else 22 }}###{{ 'YES' if pv_low else 'NO' }}###{{ lowpv_evening_floor_pct|round(0) }}###{{ lowpv_end_extra_u|round(2) }}###{{ charge_soc_cap_pct|round(0) }}###{{ 'YES' if charge_cap_limited else 'NO' }}
 
     - service: var.set
       data:
@@ -2855,6 +2886,7 @@ automation:
           CELE:
           - Cel bazowy bez doładowania do oddawania: {{ wyniki_pakiet.split('###')[0] }}%
           - Cel finalny: {{ wyniki_pakiet.split('###')[1] }}%
+          - Limit planowania ładowania 13-15: {{ wyniki_pakiet.split('###')[46] }}% (obcięto plan: {{ wyniki_pakiet.split('###')[47] }})
 
           DOŁADOWANIE Z SIECI:
           - Bazowe doładowanie: {{ wyniki_pakiet.split('###')[2] }} kWh

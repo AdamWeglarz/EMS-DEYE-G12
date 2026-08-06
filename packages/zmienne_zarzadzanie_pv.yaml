@@ -87,6 +87,14 @@ var:
     unit_of_measurement: "kWh"
     restore: true
 
+  magazyn_soc_cap_ladowanie_13_15_percent:
+    unique_id: "magazyn_soc_cap_ladowanie_13_15_percent"
+    friendly_name: "Magazyn: max SOC ładowania 13-15 (%)"
+    icon: "mdi:battery-90"
+    initial_value: 95
+    unit_of_measurement: "%"
+    restore: true
+
   magazyn_soc_cap_precheck_popoludnie_percent:
     unique_id: "magazyn_soc_cap_precheck_popoludnie_percent"
     friendly_name: "Magazyn: max SOC pre-check popołudnia (%)"

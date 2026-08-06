@@ -165,6 +165,7 @@ Sensor `sensor.solarman_mode_status` pokazuje aktualnie rozpoznany tryb (np. _"�
 6. Jeśli `input_boolean.magazyn_doladowanie_pod_eksport_wieczor` = ON → **ETAP 2**: doładowuje pod planowany eksport wieczorny (patrz niżej).
    - Sloty eksportowe są rozpoznawane po kandydatach cenowych, a nie po aktualnie dostępnej nadwyżce baterii. Dzięki temu niski SOC o 13:00 nie daje fałszywego `NO_SLOTS`, tylko uruchamia doładowanie pod drogie sloty 15–22.
    - Jeśli slot 22:00–23:00 spełnia próg ceny, zapisywana jest flaga `var.magazyn_plan_export_po_22`, plan ładowania chroni energię domu do 23:00, a nocna blokada przesuwa się z 22:00 na 23:00.
+7. Po zsumowaniu celu bazowego, top-upu eksportowego i rezerwy LOWPV cały plan jest ograniczany przez `var.magazyn_soc_cap_ladowanie_13_15_percent` (domyślnie 95%), pozostawiając miejsce na późniejszą nadwyżkę PV.
 
 Modyfikatory zużycia jak w oknie RANO.
 
@@ -362,6 +363,7 @@ Wszystkie w `packages/zmienne_zarzadzanie_pv.yaml` jako `var:` (edytowalne z UI 
 | `magazyn_soc_floor_percent` | 20% | Techniczne minimum SOC (korygowane przez pogodę) |
 | `cel_naladowania_o_13` | 50% | Docelowy SOC o 13:00 |
 | `magazyn_ladowanie_13_15_capacity_kwh` | 14 kWh | Zakładana energia możliwa do doładowania w oknie 13:00-15:00; konserwatywny limit do planowania, bo końcówka ładowania do 100% zwalnia |
+| `magazyn_soc_cap_ladowanie_13_15_percent` | 95% | Maksymalny cel ładowania planera 13–15; obejmuje cel bazowy, top-up eksportowy i LOWPV, zostawiając 5% miejsca na PV |
 | `magazyn_lowpv_threshold_rano_kwh` | 8 kWh | LOWPV próg RANO – diagnostyka, bez wymuszania 100% |
 | `magazyn_lowpv_threshold_popoludnie_kwh` | 8 kWh | LOWPV próg POŁUDNIE – poniżej planuj wyższy SOC na koniec okna |
 | `magazyn_min_zysk_sprzedaz_pln_kwh` | 0,38 PLN/kWh | Minimalny spread RCE do decyzji o sprzedaży |
@@ -447,6 +449,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 ---
 
 ## Historia zmian
+
+### 2026-08-06
+- **EMS1: limit ładowania 13–15 do 95%** (`packages/automations_magazyn.yaml`, `packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`): końcowy plan popołudniowy ogranicza łącznie cel bazowy, top-up pod eksport i rezerwę LOWPV przez `var.magazyn_soc_cap_ladowanie_13_15_percent` (domyślnie 95%). Limit falownika i planowana energia importu są liczone już po obcięciu, pozostawiając 5% pojemności na nadwyżkę PV. Poranny pre-check oraz zgodny z nim nocny preview również ograniczają zakładaną zdolność ładowania 13–15 do energii osiągalnej przy tym capie.
 
 ### 2026-07-07
 - **EMS1: eksport wraca do podsumowania finansowego 23:59** (`packages/solarmansafe.yaml`, `packages/finanse_pv.yaml`): sensory `Solarman Total Energy Bought/Sold Safe` potrafią teraz wrócić do realnego totalizera po dużym historycznym przekłamaniu w górę, zamiast blokować się na zawyżonym `max(raw, prev)`. Akumulacja finansów dostała dodatkowy trigger `23:58:30`, żeby przed resetem 23:59 domknąć eksport/import z ostatniego slotu dnia.

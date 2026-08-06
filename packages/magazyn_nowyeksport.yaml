@@ -2902,6 +2902,12 @@ automation:
             {% set afternoon_charge_cap_u = states('var.magazyn_ladowanie_13_15_capacity_kwh') | float(14) %}
             {% if afternoon_charge_cap_u < 0 %}{% set afternoon_charge_cap_u = 0 %}{% endif %}
             {% if afternoon_charge_cap_u > max_ene_u %}{% set afternoon_charge_cap_u = max_ene_u %}{% endif %}
+            {% set afternoon_charge_soc_cap_pct = states('var.magazyn_soc_cap_ladowanie_13_15_percent') | float(95) %}
+            {% if afternoon_charge_soc_cap_pct < 25 %}{% set afternoon_charge_soc_cap_pct = 25 %}{% endif %}
+            {% if afternoon_charge_soc_cap_pct > 100 %}{% set afternoon_charge_soc_cap_pct = 100 %}{% endif %}
+            {% set afternoon_charge_soc_cap_u = ((afternoon_charge_soc_cap_pct / 100) * pojemnosc_kwh - prog_min_kwh) %}
+            {% if afternoon_charge_soc_cap_u < 0 %}{% set afternoon_charge_soc_cap_u = 0 %}{% endif %}
+            {% if afternoon_charge_cap_u > afternoon_charge_soc_cap_u %}{% set afternoon_charge_cap_u = afternoon_charge_soc_cap_u %}{% endif %}
             {% set afternoon_precheck_soc_cap_pct = states('var.magazyn_soc_cap_precheck_popoludnie_percent') | float(90) %}
             {% if afternoon_precheck_soc_cap_pct < 25 %}{% set afternoon_precheck_soc_cap_pct = 25 %}{% endif %}
             {% if afternoon_precheck_soc_cap_pct > 100 %}{% set afternoon_precheck_soc_cap_pct = 100 %}{% endif %}
