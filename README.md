@@ -644,6 +644,7 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ### 2026-09-28
 - **Rachunki i depozyt — trwałe encje po restarcie HA** (`packages/rachunki_energia.yaml`, `scripts/energy_billing/worker.py`): dodano wersjonowane deklaracje 48 `var.rachunki_*`, helperów, skryptów formularza i sensora świeżości. Worker sprawdza kompletność celów publikacji i loguje brak konfiguracji zamiast cicho utracić dane po reloadzie.
+- **Rachunki i depozyt — saldo pozostałe w tabelach** (`dashboards/rachunki_energia.yaml`, `scripts/energy_billing/worker.py`): dodano saldo depozytu po rozliczeniu dnia i miesiąca do podsumowań oraz osobne kolumny `Dep. pozostały` w historii dziennej i miesięcznej.
 
 ---
 
