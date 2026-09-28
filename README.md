@@ -642,6 +642,9 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 - Sprzątanie ma wyższy priorytet niż urlop we wszystkich obliczeniach zużycia
 - Poprawiono wzór `soc_stop_target` dla trybu partial w eksporcie wieczornym
 
+### 2026-09-28
+- **Rachunki i depozyt — trwałe encje po restarcie HA** (`packages/rachunki_energia.yaml`, `scripts/energy_billing/worker.py`): dodano wersjonowane deklaracje 48 `var.rachunki_*`, helperów, skryptów formularza i sensora świeżości. Worker sprawdza kompletność celów publikacji i loguje brak konfiguracji zamiast cicho utracić dane po reloadzie.
+
 ---
 
 ## Backlog / TODO
