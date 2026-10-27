@@ -8,6 +8,8 @@ automation:
     Zmienia tylko parametry, które wymagają zmiany.
     Przy wyłączeniu trybu najpierw czyści ślad po tym trybie,
     a następnie doprowadza falownik do finalnego stanu.
+    Przy poprawnym odczycie SOC poniżej 20% priorytetowo doładowuje
+    z sieci do 20%, niezależnie od harmonogramu i przełączników eksportu.
 
   trigger:
     - platform: state
@@ -16,21 +18,39 @@ automation:
         - input_boolean.battery_discharge_to_grid
         - input_boolean.pv_discharge_to_grid
         - input_number.manual_battery_charge_limit
+    - platform: template
+      value_template: >
+        {% set soc = states('sensor.solarman_battery') %}
+        {{ is_number(soc) and 0 <= soc | float < 20 }}
+    - platform: template
+      value_template: >
+        {% set soc = states('sensor.solarman_battery') %}
+        {{ is_number(soc) and 20 <= soc | float <= 100 }}
+    - platform: homeassistant
+      event: start
+    - platform: time_pattern
+      minutes: "/1"
 
   variables:
     delay_after_change: "00:00:02"
 
-    trigger_entity: "{{ trigger.entity_id }}"
-    trigger_to: "{{ trigger.to_state.state if trigger.to_state is not none else '' }}"
+    soc_recovery: >
+      {% set soc = states('sensor.solarman_battery') %}
+      {{ is_number(soc) and 0 <= soc | float < 20 }}
+
+    trigger_entity: "{{ trigger.entity_id | default('') }}"
+    trigger_to: "{{ trigger.to_state.state if trigger.to_state is defined and trigger.to_state is not none else '' }}"
 
     manual_limit: "{{ states('input_number.manual_battery_charge_limit') | int(100) }}"
 
     desired_mode: >
-      {% if trigger.entity_id == 'input_boolean.pv_discharge_to_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
+      {% if soc_recovery %}
+        soc_recovery
+      {% elif trigger_entity == 'input_boolean.pv_discharge_to_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
         pv_export
-      {% elif trigger.entity_id == 'input_boolean.battery_discharge_to_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
+      {% elif trigger_entity == 'input_boolean.battery_discharge_to_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
         bat_export
-      {% elif trigger.entity_id == 'input_boolean.battery_charge_from_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
+      {% elif trigger_entity == 'input_boolean.battery_charge_from_grid' and trigger.to_state is not none and trigger.to_state.state == 'on' %}
         charge_from_grid
       {% elif is_state('input_boolean.pv_discharge_to_grid', 'on') %}
         pv_export
@@ -43,13 +63,15 @@ automation:
       {% endif %}
 
     target_switch_grid_charging: >
-      {% if desired_mode == 'charge_from_grid' %}on{% else %}off{% endif %}
+      {% if desired_mode in ['charge_from_grid', 'soc_recovery'] %}on{% else %}off{% endif %}
 
     target_program_charging: >
-      {% if desired_mode == 'charge_from_grid' %}Grid{% else %}Disabled{% endif %}
+      {% if desired_mode in ['charge_from_grid', 'soc_recovery'] %}Grid{% else %}Disabled{% endif %}
 
     target_program_soc: >
-      {% if desired_mode == 'charge_from_grid' %}
+      {% if desired_mode == 'soc_recovery' %}
+        {{ [manual_limit, 20] | max if is_state('input_boolean.battery_charge_from_grid', 'on') else 20 }}
+      {% elif desired_mode == 'charge_from_grid' %}
         {{ manual_limit }}
       {% else %}
         20
@@ -82,7 +104,7 @@ automation:
         - conditions:
             - condition: template
               value_template: >
-                {{ trigger_entity == 'input_boolean.pv_discharge_to_grid' and trigger_to == 'off' }}
+                {{ not soc_recovery and trigger_entity == 'input_boolean.pv_discharge_to_grid' and trigger_to == 'off' }}
           sequence:
             - choose:
                 - conditions:
@@ -130,7 +152,7 @@ automation:
         - conditions:
             - condition: template
               value_template: >
-                {{ trigger_entity == 'input_boolean.battery_discharge_to_grid' and trigger_to == 'off' }}
+                {{ not soc_recovery and trigger_entity == 'input_boolean.battery_discharge_to_grid' and trigger_to == 'off' }}
           sequence:
             - repeat:
                 count: 6
@@ -165,7 +187,7 @@ automation:
         - conditions:
             - condition: template
               value_template: >
-                {{ trigger_entity == 'input_boolean.battery_charge_from_grid' and trigger_to == 'off' }}
+                {{ not soc_recovery and trigger_entity == 'input_boolean.battery_charge_from_grid' and trigger_to == 'off' }}
           sequence:
             - choose:
                 - conditions:
@@ -376,7 +398,7 @@ automation:
 
         - conditions:
             - condition: template
-              value_template: "{{ desired_mode == 'charge_from_grid' }}"
+              value_template: "{{ desired_mode in ['charge_from_grid', 'soc_recovery'] }}"
           sequence:
             - choose:
                 - conditions:
@@ -449,6 +471,12 @@ automation:
 
   variables:
     delay_after_change: "00:00:02"
+
+  condition:
+    - condition: template
+      value_template: >
+        {% set soc = states('sensor.solarman_battery') %}
+        {{ not (is_number(soc) and 0 <= soc | float < 20) }}
 
   action:
     # wyłącz booleany
@@ -581,6 +609,12 @@ automation:
     delay_after_change: "00:00:02"
     current_state: "{{ trigger.to_state.state if trigger.to_state is not none else '' }}"
     manual_limit: "{{ states('input_number.manual_battery_charge_limit') | int(100) }}"
+
+  condition:
+    - condition: template
+      value_template: >
+        {% set soc = states('sensor.solarman_battery') %}
+        {{ not (is_number(soc) and 0 <= soc | float < 20) }}
 
   action:
     - choose:

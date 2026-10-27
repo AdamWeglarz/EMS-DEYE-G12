@@ -448,7 +448,22 @@ Po uruchomieniu urządzenia wysyłane jest powiadomienie przez `script.ems_notif
 
 ---
 
+## Awaryjne doładowanie SOC
+
+Sterownik profilu Solarman przez całą dobę wymusza ładowanie z sieci,
+gdy prawidłowy odczyt `sensor.solarman_battery` spadnie poniżej 20%.
+Ustawia cel 20%, wyłącza eksport BAT/PV i przy 20% wraca do zwykłego
+sterowania. Nie zmienia przełącznika planowego ładowania ani jego limitu:
+trwające ładowanie do wyższego celu jest kontynuowane. Nie uruchamia
+ładowania na podstawie `unknown`, `unavailable` ani wartości spoza 0–100%.
+Reaguje na przekroczenie progu, start HA i co minutę ponawia synchronizację.
+Watchdogi profilu ustępują zabezpieczeniu poniżej 20%. Zabezpieczenie działa
+również w drogiej strefie; nie zastępuje planowania rezerwy 25% na 22:00.
+
 ## Historia zmian
+
+- **2026-10-27:** Awaryjne doładowanie z sieci przy SOC <20% do 20%, z priorytetem nad eksportem i zachowaniem wyższego planowego celu.
+
 
 ### 2026-08-06
 - **EMS1: limit ładowania 13–15 do 95%** (`packages/automations_magazyn.yaml`, `packages/magazyn_nowyeksport.yaml`, `packages/zmienne_zarzadzanie_pv.yaml`): końcowy plan popołudniowy ogranicza łącznie cel bazowy, top-up pod eksport i rezerwę LOWPV przez `var.magazyn_soc_cap_ladowanie_13_15_percent` (domyślnie 95%). Limit falownika i planowana energia importu są liczone już po obcięciu, pozostawiając 5% pojemności na nadwyżkę PV. Poranny pre-check oraz zgodny z nim nocny preview również ograniczają zakładaną zdolność ładowania 13–15 do energii osiągalnej przy tym capie.
